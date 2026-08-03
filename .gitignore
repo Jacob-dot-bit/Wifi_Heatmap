@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+venv/
+
+# Configuration locale et donnees generees
+wifi_config.json
+measurements.csv
+stats.csv
+output/
+*.avant-restauration
+
+.vscode/
+.idea/
