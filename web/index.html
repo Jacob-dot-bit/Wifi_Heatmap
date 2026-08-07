@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cartographie WiFi</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand"><span class="dot"></span> Cartographie WiFi</div>
+  <nav class="nav" id="nav">
+    <button data-view="dashboard" class="active">Vue d'ensemble</button>
+    <button data-view="config">Configuration</button>
+    <button data-view="networks">Reseaux</button>
+    <button data-view="collect">Collecte</button>
+    <button data-view="stats">Statistiques</button>
+    <button data-view="heatmaps">Heatmaps</button>
+    <button data-view="export">Export</button>
+  </nav>
+  <div class="sidebar-foot">
+    <div id="foot-iface">interface : --</div>
+    <div id="foot-points">0 point mesure</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1>Cartographie WiFi</h1>
+    <span class="crumb" id="crumb"></span>
+    <span class="spacer"></span>
+    <span class="tag" id="tag-iface">--</span>
+    <span class="tag" id="tag-status">--</span>
+  </div>
+
+  <!-- Vue d'ensemble -->
+  <section id="view-dashboard">
+    <div class="row" id="dash-stats"></div>
+    <div class="row thirds">
+      <div class="panel wide">
+        <h2>Signal moyen par reseau</h2>
+        <div id="dash-gauges"></div>
+      </div>
+      <div class="panel">
+        <h2>Couverture</h2>
+        <div id="dash-table"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Configuration -->
+  <section id="view-config" class="hidden">
+    <div class="row">
+      <div class="panel">
+        <h2>Interface reseau</h2>
+        <div class="field">
+          <label for="iface-select">Interface utilisee pour le scan</label>
+          <div class="controls">
+            <select id="iface-select"></select>
+            <button id="iface-refresh">Redetecter</button>
+          </div>
+        </div>
+        <p class="hint" id="iface-hint"></p>
+      </div>
+      <div class="panel">
+        <h2>Fichiers</h2>
+        <div class="field">
+          <label>Plan</label>
+          <input type="text" id="cfg-plan" readonly style="width:100%">
+        </div>
+        <div class="field">
+          <label>Mesures</label>
+          <input type="text" id="cfg-measures" readonly style="width:100%">
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Parametres</h2>
+      <div class="row">
+        <div class="field">
+          <label>Timeout du scan : <b id="lbl-timeout"></b> s</label>
+          <input type="range" id="cfg-timeout" min="5" max="30" step="1">
+        </div>
+        <div class="field">
+          <label>Resolution de rendu (DPI) : <b id="lbl-dpi"></b></label>
+          <input type="range" id="cfg-dpi" min="72" max="300" step="10">
+        </div>
+        <div class="field">
+          <label>Finesse d'interpolation : <b id="lbl-res"></b></label>
+          <input type="range" id="cfg-res" min="100" max="800" step="50">
+        </div>
+      </div>
+      <button id="cfg-save" class="primary">Enregistrer</button>
+    </div>
+  </section>
+
+  <!-- Reseaux -->
+  <section id="view-networks" class="hidden">
+    <div class="row thirds">
+      <div class="panel wide">
+        <h2>Reseaux a portee</h2>
+        <div class="controls" style="margin-bottom:10px">
+          <button id="scan-btn">Lancer un scan</button>
+          <button id="scan-add" disabled>Ajouter la selection</button>
+        </div>
+        <div id="scan-results"><p class="empty">Aucun scan lance.</p></div>
+      </div>
+      <div class="panel">
+        <h2>Ajouter manuellement</h2>
+        <div class="controls">
+          <input type="text" id="ssid-input" placeholder="Nom du reseau" style="flex:1">
+          <button id="ssid-add">Ajouter</button>
+        </div>
+        <h2 style="margin-top:16px">Reseaux suivis (<span id="ssid-count">0</span>)</h2>
+        <div id="ssid-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Collecte -->
+  <section id="view-collect" class="hidden">
+    <div class="row thirds">
+      <div class="panel wide">
+        <h2>Plan : clique a ta position pour lancer un scan</h2>
+        <div class="plan-wrap" id="plan-wrap">
+          <img id="plan-img" alt="Plan du logement">
+          <div class="scan-overlay hidden" id="scan-overlay">
+            <span class="spinner"></span><span id="scan-msg">Scan en cours...</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="stat" id="collect-stat"></div>
+        <div class="panel" style="margin-bottom:10px">
+          <h2>Actions</h2>
+          <div class="controls">
+            <button id="undo-btn" disabled>Annuler le dernier</button>
+            <button id="clear-btn" class="danger" disabled>Tout effacer</button>
+            <button id="save-btn" class="primary" disabled>Enregistrer</button>
+          </div>
+          <p class="hint" style="margin:10px 0 0" id="collect-hint"></p>
+        </div>
+        <div class="panel">
+          <h2>Dernier point</h2>
+          <div id="last-point"><p class="empty">Aucun point collecte.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Statistiques -->
+  <section id="view-stats" class="hidden">
+    <div class="panel">
+      <h2>Detail par reseau</h2>
+      <div id="stats-table"></div>
+    </div>
+    <div class="panel">
+      <h2>Etendue des niveaux mesures</h2>
+      <p class="hint">Barre = du minimum au maximum releve, le repere marque la moyenne.</p>
+      <div id="stats-range"></div>
+    </div>
+  </section>
+
+  <!-- Heatmaps -->
+  <section id="view-heatmaps" class="hidden">
+    <div class="panel">
+      <h2>Generation</h2>
+      <div class="controls">
+        <button id="gen-btn" class="primary">Generer les cartes</button>
+        <label for="grid-cols" style="margin:0 0 0 8px">Colonnes</label>
+        <select id="grid-cols">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="5">5</option>
+        </select>
+        <span class="hint" style="margin:0">
+          Une carte par reseau, a partir des mesures enregistrees.
+          Il faut au moins 3 points par reseau. Clique une carte pour l'agrandir.
+        </span>
+      </div>
+    </div>
+    <div class="heatmap-grid" id="heatmap-grid"></div>
+  </section>
+
+  <!-- Export -->
+  <section id="view-export" class="hidden">
+    <div class="row">
+      <div class="panel">
+        <h2>Mesures brutes</h2>
+        <p class="hint">Une ligne par couple position / reseau.</p>
+        <a href="/api/export/measurements.csv"><button>measurements.csv</button></a>
+      </div>
+      <div class="panel">
+        <h2>Statistiques agregees</h2>
+        <p class="hint">Min, moyenne, max et nombre de points par reseau.</p>
+        <a href="/api/export/stats.csv"><button>stats.csv</button></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Agrandissement d'une carte -->
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b id="modal-title"></b>
+      <span class="spacer"></span>
+      <a id="modal-dl" download><button>Telecharger le PNG</button></a>
+      <button id="modal-close">Fermer</button>
+    </div>
+    <div class="row" id="modal-stats"></div>
+    <img id="modal-img" alt="">
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
