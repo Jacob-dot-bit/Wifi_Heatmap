@@ -7,8 +7,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from scipy.interpolate import RBFInterpolator
+from scipy.spatial import cKDTree
 
 logger = logging.getLogger(__name__)
+
+# Noyaux compares lors du calibrage. Les multiplicateurs de lissage sont
+# exprimes en fraction de la taille du plan pour rester valables quelle que
+# soit la resolution de l'image.
+KERNELS = ("linear", "thin_plate_spline")
+SMOOTHING_RATIOS = (0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 20.0, 100.0)
+
+# En dessous de ce nombre de points, la validation croisee n'est pas fiable.
+MIN_POINTS_TUNING = 5
 
 
 class HeatmapGenerator:
@@ -19,12 +29,18 @@ class HeatmapGenerator:
         resolution: int = 400,
         alpha: float = 0.55,
         smoothing: float = 1.0,
+        auto_tune: bool = True,
+        fade: bool = True,
+        fade_factor: float = 2.5,
     ):
         self.plan_path = plan_path
         self.dpi = dpi
         self.resolution = resolution
         self.alpha = alpha
         self.smoothing = smoothing
+        self.auto_tune = auto_tune
+        self.fade = fade
+        self.fade_factor = fade_factor
 
         try:
             self.plan = mpimg.imread(plan_path)
@@ -32,6 +48,83 @@ class HeatmapGenerator:
         except Exception as e:
             logger.error(f"Chargement du plan impossible: {e}")
             raise
+
+    # --- Choix du modele ---------------------------------------------------
+
+    def _loocv_rmse(self, points, values, kernel, smoothing) -> float:
+        """Erreur de prediction en laissant chaque point de cote a son tour."""
+        errors = []
+        for i in range(len(points)):
+            keep = np.arange(len(points)) != i
+            try:
+                model = RBFInterpolator(
+                    points[keep], values[keep], kernel=kernel, smoothing=smoothing
+                )
+                errors.append(model(points[i][None])[0] - values[i])
+            except Exception:
+                return np.inf
+        return float(np.sqrt(np.mean(np.square(errors))))
+
+    def _fit(self, points, values):
+        """Ajuste le modele, en calibrant noyau et lissage si possible.
+
+        Retourne (modele, description). Un lissage trop faible fait osciller
+        l'interpolation entre des mesures naturellement bruitees ; la
+        validation croisee choisit le compromis a partir des donnees.
+        """
+        scale = float(max(self.w, self.h))
+        candidates = [(k, r * scale) for k in KERNELS for r in SMOOTHING_RATIOS]
+
+        if not self.auto_tune or len(points) < MIN_POINTS_TUNING:
+            kernel, smoothing = "linear", scale  # compromis sur peu de points
+            model = RBFInterpolator(points, values, kernel=kernel, smoothing=smoothing)
+            return model, f"{kernel}/{smoothing:.3g} (defaut)"
+
+        best = min(candidates, key=lambda c: self._loocv_rmse(points, values, *c))
+        kernel, smoothing = best
+        rmse = self._loocv_rmse(points, values, kernel, smoothing)
+
+        # Reference : ignorer la position et predire la moyenne. Si le modele
+        # ne fait pas mieux, autant l'annoncer dans le journal.
+        baseline = float(np.sqrt(np.mean([
+            (values[np.arange(len(values)) != i].mean() - values[i]) ** 2
+            for i in range(len(values))
+        ])))
+        if rmse > baseline:
+            logger.info(
+                "Interpolation peu informative pour ce jeu de points "
+                f"(RMSE {rmse:.1f} dB contre {baseline:.1f} dB pour la moyenne)."
+            )
+
+        model = RBFInterpolator(points, values, kernel=kernel, smoothing=smoothing)
+        return model, f"{kernel}/{smoothing:.3g}, RMSE {rmse:.1f} dB"
+
+    # --- Couverture --------------------------------------------------------
+
+    def _coverage_alpha(self, points, grid_xy, shape):
+        """Opacite decroissante a mesure qu'on s'eloigne des mesures.
+
+        Sans cela, la carte peint une couleur franche sur des zones jamais
+        mesurees, ou l'interpolation ne fait qu'extrapoler.
+        """
+        tree = cKDTree(points)
+        distance, _ = tree.query(grid_xy)
+        distance = distance.reshape(shape)
+
+        # Distance caracteristique entre mesures voisines.
+        if len(points) > 1:
+            neighbour, _ = cKDTree(points).query(points, k=2)
+            spacing = float(np.median(neighbour[:, 1]))
+        else:
+            spacing = max(self.w, self.h) / 10.0
+        spacing = max(spacing, max(self.w, self.h) / 50.0)
+
+        inner = spacing
+        outer = spacing * max(self.fade_factor, 1.01)
+        ramp = np.clip((outer - distance) / (outer - inner), 0.0, 1.0)
+        return ramp * self.alpha
+
+    # --- Rendu -------------------------------------------------------------
 
     def generate(
         self,
@@ -60,19 +153,21 @@ class HeatmapGenerator:
 
         try:
             points = np.column_stack([xs, ys])
-            rbf = RBFInterpolator(
-                points,
-                zs,
-                kernel="thin_plate_spline",
-                smoothing=self.smoothing,
-            )
+            model, model_desc = self._fit(points, zs)
 
             gx, gy = np.meshgrid(
                 np.linspace(0, self.w, self.resolution),
                 np.linspace(0, self.h, self.resolution),
             )
-            gz = rbf(np.column_stack([gx.ravel(), gy.ravel()])).reshape(gx.shape)
+            grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+            gz = model(grid_xy).reshape(gx.shape)
             gz = np.clip(gz, -100, -20)
+
+            alpha = (
+                self._coverage_alpha(points, grid_xy, gx.shape)
+                if self.fade
+                else self.alpha
+            )
 
             fig, ax = plt.subplots(figsize=(14, 9))
             ax.imshow(self.plan, zorder=1)
@@ -82,7 +177,7 @@ class HeatmapGenerator:
                 extent=[0, self.w, self.h, 0],
                 origin="upper",
                 cmap="RdYlGn",
-                alpha=self.alpha,
+                alpha=alpha,
                 vmin=-85,
                 vmax=-35,
                 zorder=2,
@@ -120,11 +215,14 @@ class HeatmapGenerator:
             )
 
             min_r, max_r, moy_r = zs.min(), zs.max(), zs.mean()
+            subtitle = f"{len(pts)} points  |  {model_desc}"
+            if self.fade:
+                subtitle += "  |  zones non mesurees estompees"
             ax.set_title(
                 f"Heatmap WiFi - {ssid}\n"
                 f"Min: {min_r:.0f} dBm  |  Max: {max_r:.0f} dBm  |  "
-                f"Moy: {moy_r:.1f} dBm  |  {len(pts)} points",
-                fontsize=12,
+                f"Moy: {moy_r:.1f} dBm\n{subtitle}",
+                fontsize=11,
             )
             ax.axis("off")
             plt.tight_layout()
@@ -133,12 +231,13 @@ class HeatmapGenerator:
 
             msg = (
                 f"{ssid:<30} -> {output_file} "
-                f"(min {min_r:.0f} / moy {moy_r:.1f} / max {max_r:.0f} dBm)"
+                f"(min {min_r:.0f} / moy {moy_r:.1f} / max {max_r:.0f} dBm, {model_desc})"
             )
             logger.info(msg)
             return True, msg
 
         except Exception as e:
+            plt.close("all")
             msg = f"Erreur pour {ssid}: {e}"
             logger.error(msg)
             return False, msg

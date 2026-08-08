@@ -211,6 +211,9 @@ def menu_main(config: Config):
                     resolution=config.heatmap_resolution,
                     alpha=config.heatmap_alpha,
                     smoothing=config.rbf_smoothing,
+                    auto_tune=config.rbf_auto_tune,
+                    fade=config.fade_extrapolation,
+                    fade_factor=config.fade_factor,
                 )
                 Path(config.output_dir).mkdir(exist_ok=True)
                 gen.generate_all(measurements, ssids, config.output_dir)

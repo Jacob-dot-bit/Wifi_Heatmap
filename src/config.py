@@ -24,6 +24,9 @@ class Config:
         self.heatmap_resolution: int = 400
         self.heatmap_alpha: float = 0.55
         self.rbf_smoothing: float = 1.0
+        self.rbf_auto_tune: bool = True
+        self.fade_extrapolation: bool = True
+        self.fade_factor: float = 2.5
         self.output_dir: str = "output"
 
         self.load()
@@ -48,6 +51,9 @@ class Config:
             "heatmap_resolution": self.heatmap_resolution,
             "heatmap_alpha": self.heatmap_alpha,
             "rbf_smoothing": self.rbf_smoothing,
+            "rbf_auto_tune": self.rbf_auto_tune,
+            "fade_extrapolation": self.fade_extrapolation,
+            "fade_factor": self.fade_factor,
             "output_dir": self.output_dir,
         }
         try:

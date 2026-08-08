@@ -229,6 +229,9 @@ def generate_heatmaps():
             resolution=config.heatmap_resolution,
             alpha=config.heatmap_alpha,
             smoothing=config.rbf_smoothing,
+            auto_tune=config.rbf_auto_tune,
+            fade=config.fade_extrapolation,
+            fade_factor=config.fade_factor,
         )
         (BASE_DIR / config.output_dir).mkdir(exist_ok=True)
         done, total = gen.generate_all(measurements, ssids, config.output_dir)
