@@ -83,6 +83,23 @@ body {
   font-size: 11px;
 }
 
+.sidebar-foot .author {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.credits {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--dim);
+  font-size: 11px;
+  text-align: right;
+}
+
 /* ---------- Zone principale ---------- */
 
 .main { margin-left: var(--sidebar-w); padding: 12px 18px 60px; }

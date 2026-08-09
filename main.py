@@ -29,7 +29,7 @@ def clear_screen():
 
 def print_header():
     print("\n" + "=" * 70)
-    print("Cartographie WiFi")
+    print("Cartographie WiFi  -  Jakub WERLINSKI")
     print("=" * 70)
 
 
@@ -41,22 +41,22 @@ def select_interface() -> str:
     """Demande à l'utilisateur de choisir une interface réseau."""
     clear_screen()
     print_header()
-    print("\nInterface reseau")
+    print("\nInterface réseau")
     print("-" * 70)
 
     scanner = WiFiScanner()
     interfaces = scanner.get_available_interfaces()
 
     if not interfaces:
-        print("  Aucune interface detectee automatiquement.")
-        interface = input("  Interface (ex: wlan0): ").strip()
+        print("  Aucune interface détectée automatiquement.")
+        interface = input("  Interface (ex. wlan0) : ").strip()
         return interface or "wlan0"
 
-    print(f"\n  Interfaces detectees ({len(interfaces)}):")
+    print(f"\n  Interfaces détectées ({len(interfaces)}) :")
     for i, iface in enumerate(interfaces, 1):
         print(f"    {i}. {iface}")
 
-    choice = input("\n  Choix [1]: ").strip()
+    choice = input("\n  Choix [1] : ").strip()
     if not choice:
         return interfaces[0]
     try:
@@ -72,7 +72,7 @@ def menu_ssids(config: Config):
     while True:
         clear_screen()
         print_header()
-        print("\nSSIDs")
+        print("\nSSID")
         print("-" * 70)
         if config.ssids:
             for i, ssid in enumerate(config.ssids, 1):
@@ -82,36 +82,36 @@ def menu_ssids(config: Config):
 
         print("\n  [1] Ajouter un SSID")
         print("  [2] Retirer un SSID")
-        print("  [3] Ajouter depuis les reseaux detectes")
+        print("  [3] Ajouter depuis les réseaux détectés")
         print("  [4] Retour")
 
-        choice = input("\nChoix: ").strip()
+        choice = input("\nChoix : ").strip()
 
         if choice == "1":
-            ssid = input("  SSID a ajouter: ").strip()
+            ssid = input("  SSID à ajouter : ").strip()
             if not ssid:
                 print("  SSID vide.")
             elif config.add_ssid(ssid):
-                print(f"  Ajoute: {ssid}")
+                print(f"  Ajouté : {ssid}")
             else:
-                print(f"  Deja present: {ssid}")
+                print(f"  Déjà présent : {ssid}")
             pause()
 
         elif choice == "2":
             if not config.ssids:
-                print("  Aucun SSID a retirer.")
+                print("  Aucun SSID à retirer.")
                 pause()
                 continue
             for i, ssid in enumerate(config.ssids, 1):
                 print(f"  {i}. {ssid}")
             try:
-                idx = int(input("  Numero: ").strip()) - 1
+                idx = int(input("  Numéro : ").strip()) - 1
                 if 0 <= idx < len(config.ssids):
                     removed = config.ssids[idx]
                     config.remove_ssid(removed)
-                    print(f"  Retire: {removed}")
+                    print(f"  Retiré : {removed}")
             except ValueError:
-                print("  Numero invalide.")
+                print("  Numéro invalide.")
             pause()
 
         elif choice == "3":
@@ -119,7 +119,7 @@ def menu_ssids(config: Config):
             scanner = WiFiScanner(interface=config.wifi_interface)
             networks = scanner.scan_all()
             if not networks:
-                print("  Aucun reseau detecte.")
+                print("  Aucun réseau détecté.")
                 pause()
                 continue
 
@@ -128,7 +128,7 @@ def menu_ssids(config: Config):
                 mark = "x" if ssid in config.ssids else " "
                 print(f"  [{mark}] {i:2d}. {ssid:<35} {rssi:>7.1f} dBm")
 
-            sel = input("\n  Ajouter (ex: 1,2,4 ou 'tous'): ").strip()
+            sel = input("\n  Ajouter (ex. 1,2,4 ou 'tous') : ").strip()
             if sel.lower() == "tous":
                 for ssid in networks:
                     config.add_ssid(ssid)
@@ -151,33 +151,33 @@ def menu_main(config: Config):
         print_header()
 
         valid, msg = config.is_valid()
-        print(f"\nStatut: {'pret' if valid else msg}")
-        print(f"SSIDs: {len(config.ssids)}")
-        print(f"Plan: {Path(config.plan_path).name}")
-        print(f"Mesures: {Path(config.measurements_path).name}")
-        print(f"Interface: {config.wifi_interface}")
+        print(f"\nStatut : {'prêt' if valid else msg}")
+        print(f"SSID : {len(config.ssids)}")
+        print(f"Plan : {Path(config.plan_path).name}")
+        print(f"Mesures : {Path(config.measurements_path).name}")
+        print(f"Interface : {config.wifi_interface}")
 
-        print("\n  [1] Gerer les SSIDs")
+        print("\n  [1] Gérer les SSID")
         print("  [2] Collecter des mesures")
-        print("  [3] Generer les heatmaps")
+        print("  [3] Générer les heatmaps")
         print("  [4] Statistiques")
         print("  [5] Exporter en CSV")
         print("  [6] Changer l'interface WiFi")
         print("  [7] Sauvegarder la configuration")
         print("  [8] Quitter")
 
-        choice = input("\nChoix: ").strip()
+        choice = input("\nChoix : ").strip()
 
         if choice == "1":
             menu_ssids(config)
 
         elif choice == "2":
             if not config.ssids:
-                print("  Configurez d'abord les SSIDs.")
+                print("  Configurez d'abord les SSID.")
                 pause()
                 continue
             if not Path(config.plan_path).exists():
-                print(f"  Plan introuvable: {config.plan_path}")
+                print(f"  Plan introuvable : {config.plan_path}")
                 pause()
                 continue
             try:
@@ -190,7 +190,7 @@ def menu_main(config: Config):
                 )
                 collector.run()
             except Exception as e:
-                print(f"  Erreur: {e}")
+                print(f"  Erreur : {e}")
                 pause()
 
         elif choice == "3":
@@ -201,7 +201,7 @@ def menu_main(config: Config):
                 continue
             valid, msg = validate_measurements(measurements)
             if not valid:
-                print(f"  Donnees invalides: {msg}")
+                print(f"  Données invalides : {msg}")
                 pause()
                 continue
             try:
@@ -218,7 +218,7 @@ def menu_main(config: Config):
                 Path(config.output_dir).mkdir(exist_ok=True)
                 gen.generate_all(measurements, ssids, config.output_dir)
             except Exception as e:
-                print(f"  Erreur: {e}")
+                print(f"  Erreur : {e}")
             pause()
 
         elif choice == "4":
@@ -248,9 +248,9 @@ def menu_main(config: Config):
                 print(f"  Impossible de charger {config.measurements_path}")
                 pause()
                 continue
-            output = input("  Fichier CSV [measurements.csv]: ").strip() or "measurements.csv"
+            output = input("  Fichier CSV [measurements.csv] : ").strip() or "measurements.csv"
             if export_to_csv(measurements, output):
-                print(f"  Exporte: {output}")
+                print(f"  Exporté : {output}")
             else:
                 print("  Erreur lors de l'export.")
             pause()
@@ -262,7 +262,7 @@ def menu_main(config: Config):
 
         elif choice == "7":
             config.save()
-            print(f"  Configuration sauvegardee: {config.config_file}")
+            print(f"  Configuration sauvegardée : {config.config_file}")
             pause()
 
         elif choice == "8":
@@ -271,7 +271,7 @@ def menu_main(config: Config):
 
 
 def first_run_setup(config: Config):
-    """Configuration au premier lancement (interface + SSIDs)."""
+    """Configuration au premier lancement (interface + SSID)."""
     clear_screen()
     print_header()
     print("\nConfiguration initiale")
@@ -279,21 +279,21 @@ def first_run_setup(config: Config):
 
     config.wifi_interface = select_interface()
 
-    print("\n  [1] Scanner et ajouter des SSIDs")
+    print("\n  [1] Scanner et ajouter des SSID")
     print("  [2] Ajouter manuellement")
     print("  [3] Plus tard")
-    choice = input("\nChoix: ").strip()
+    choice = input("\nChoix : ").strip()
 
     if choice == "1":
         print("\nScan en cours...")
         networks = WiFiScanner(interface=config.wifi_interface).scan_all()
         for ssid in networks:
             config.add_ssid(ssid)
-        print(f"{len(networks)} reseaux ajoutes.")
+        print(f"{len(networks)} réseaux ajoutés.")
         pause()
     elif choice == "2":
         while True:
-            ssid = input("SSID (vide pour terminer): ").strip()
+            ssid = input("SSID (vide pour terminer) : ").strip()
             if not ssid:
                 break
             config.add_ssid(ssid)
@@ -311,7 +311,7 @@ def main():
         print()
         sys.exit(0)
     except Exception as e:
-        logger.error(f"Erreur fatale: {e}")
+        logger.error(f"Erreur fatale : {e}")
         sys.exit(1)
 
 

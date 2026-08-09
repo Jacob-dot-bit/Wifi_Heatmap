@@ -21,7 +21,7 @@ def export_to_csv(
                 rows.append({"x": x, "y": y, "ssid": ssid, "rssi": rssi})
 
         if not rows:
-            logger.warning("Aucune donnee a exporter")
+            logger.warning("Aucune donnée à exporter")
             return False
 
         with open(output_file, "w", newline="") as f:
@@ -35,7 +35,7 @@ def export_to_csv(
 
 
 def load_measurements(file_path: str) -> tuple[bool, List[Dict], List[str]]:
-    """Charge un fichier de mesures. Retourne (succes, mesures, ssids)."""
+    """Charge un fichier de mesures. Retourne (succès, mesures, ssids)."""
     try:
         with open(file_path) as f:
             data = json.load(f)
@@ -93,9 +93,9 @@ def validate_measurements(measurements: List[Dict]) -> tuple[bool, str]:
         return False, "Aucune mesure"
     for i, m in enumerate(measurements):
         if not all(k in m for k in ("x", "y", "signaux")):
-            return False, f"Mesure {i}: structure invalide"
+            return False, f"Mesure {i} : structure invalide"
         if not isinstance(m["signaux"], dict):
-            return False, f"Mesure {i}: 'signaux' doit etre un dict"
+            return False, f"Mesure {i} : 'signaux' doit être un dict"
         if not (0 <= m["x"] <= 1 and 0 <= m["y"] <= 1):
-            return False, f"Mesure {i}: x ou y hors [0,1]"
+            return False, f"Mesure {i} : x ou y hors [0,1]"
     return True, "ok"

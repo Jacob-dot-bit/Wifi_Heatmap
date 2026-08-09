@@ -1,4 +1,4 @@
-"""Configuration de l'application, persistee en JSON."""
+"""Configuration de l'application, persistée en JSON."""
 
 import json
 import logging
@@ -63,7 +63,7 @@ class Config:
             logger.error(f"Sauvegarde impossible: {e}")
 
     def add_ssid(self, ssid: str) -> bool:
-        """Ajoute un SSID. Retourne False s'il etait deja present."""
+        """Ajoute un SSID. Retourne False s'il était déjà présent."""
         if ssid not in self.ssids:
             self.ssids.append(ssid)
             return True
@@ -80,7 +80,7 @@ class Config:
 
     def is_valid(self) -> tuple[bool, str]:
         if not self.ssids:
-            return False, "Aucun SSID configure"
+            return False, "Aucun SSID configuré"
         if not Path(self.plan_path).exists():
             return False, f"Plan introuvable: {self.plan_path}"
         return True, "ok"

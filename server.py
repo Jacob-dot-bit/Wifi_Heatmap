@@ -71,7 +71,7 @@ def plan():
 
 
 def _thumbnail(source: Path, width: int) -> Path:
-    """Vignette mise en cache sur disque, regeneree si la source a change."""
+    """Vignette mise en cache sur disque, régénérée si la source a changé."""
     width = max(80, min(width, 1200))
     cache_dir = source.parent / ".thumbs"
     cache_dir.mkdir(exist_ok=True)

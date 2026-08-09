@@ -1,4 +1,4 @@
-"""Scan des reseaux WiFi via la commande `iw`."""
+"""Scan des réseaux WiFi via la commande `iw`."""
 
 import subprocess
 import re
@@ -39,7 +39,7 @@ class WiFiScanner:
                 text=True,
             )
         except subprocess.TimeoutExpired:
-            logger.error(f"Timeout du scan ({self.timeout}s)")
+            logger.error(f"Délai de scan dépassé ({self.timeout} s)")
             return {}
         except FileNotFoundError:
             logger.error("'iw' introuvable (sudo apt install iw)")

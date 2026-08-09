@@ -1,4 +1,4 @@
-"""Collecte interactive des mesures via une fenetre matplotlib."""
+"""Collecte interactive des mesures via une fenêtre matplotlib."""
 
 import logging
 from pathlib import Path
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class InteractiveCollector:
-    """Affiche le plan, scanne le WiFi a chaque clic et enregistre les points."""
+    """Affiche le plan, scanne le WiFi à chaque clic et enregistre les points."""
 
     def __init__(
         self,
@@ -43,7 +43,7 @@ class InteractiveCollector:
 
     def run(self) -> bool:
         if not self.ssids:
-            logger.error("Aucun SSID configure")
+            logger.error("Aucun SSID configuré")
             return False
 
         self.fig = plt.figure(figsize=(14, 9))
@@ -53,7 +53,7 @@ class InteractiveCollector:
 
         self.ax.imshow(self.plan)
         self.ax.set_title(
-            "Clique à chaque position — attends le scan avant de recliquer",
+            "Cliquez à chaque position, puis attendez la fin du scan",
             fontsize=11,
         )
         self.ax.axis("off")
@@ -82,7 +82,7 @@ class InteractiveCollector:
         self.status_txt = self.ax.text(
             0.01,
             0.01,
-            "Clique sur le plan",
+            "Cliquez sur le plan",
             transform=self.ax.transAxes,
             fontsize=10,
             bbox=dict(boxstyle="round", fc="white", alpha=0.8),
@@ -92,7 +92,7 @@ class InteractiveCollector:
         btn.on_clicked(self._on_finish)
 
         print(f"Plan: {Path(self.plan_path).name} ({self.w}x{self.h}px), {len(self.ssids)} SSIDs")
-        print("Clique, attends le scan, deplace-toi, repete.\n")
+        print("Cliquez, attendez le scan, déplacez-vous, recommencez.\n")
 
         plt.tight_layout()
         plt.show()
@@ -114,8 +114,8 @@ class InteractiveCollector:
         rssis = self.scanner.scan_all()
 
         if not rssis:
-            print("  Aucun reseau trouve.")
-            self.status_txt.set_text(f"Point {self.point_num} - aucun reseau, reclique.")
+            print("  Aucun réseau trouvé.")
+            self.status_txt.set_text(f"Point {self.point_num} - aucun réseau, recliquez.")
             self.point_num -= 1
             self.scanning = False
             self.fig.canvas.draw()
@@ -142,16 +142,16 @@ class InteractiveCollector:
             bbox=dict(boxstyle="round,pad=0.15", fc="yellow", alpha=0.8),
         )
 
-        self.status_txt.set_text(f"{self.point_num} point(s) collecte(s)")
+        self.status_txt.set_text(f"{self.point_num} point(s) collecté(s)")
         self.scanning = False
         self.fig.canvas.draw()
 
     def _on_finish(self, event):
         if not self.measurements:
-            print("Aucun point collecte.")
+            print("Aucun point collecté.")
             return
         if save_measurements(self.measurements, self.ssids, self.plan_path, self.output_file):
-            print(f"\n{len(self.measurements)} points sauvegardes.")
+            print(f"\n{len(self.measurements)} points sauvegardés.")
         else:
             print("\nErreur lors de la sauvegarde.")
         plt.close()
