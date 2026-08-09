@@ -1,0 +1,20 @@
+{
+  "ssids": [
+    "Network-01",
+    "Repeater-01",
+    "Printer-01"
+  ],
+  "wifi_interface": "wlan0",
+  "language": "en",
+  "plan_path": "data/plan.png",
+  "measurements_path": "data/mesures.json",
+  "output_dir": "output",
+  "scan_timeout": 15,
+  "heatmap_dpi": 150,
+  "heatmap_resolution": 400,
+  "heatmap_alpha": 0.55,
+  "rbf_auto_tune": true,
+  "rbf_smoothing": 1.0,
+  "fade_extrapolation": true,
+  "fade_factor": 2.5
+}

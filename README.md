@@ -102,7 +102,11 @@ output/          rendered heatmaps, thumbnails under .thumbs/
 ## Settings
 
 `wifi_config.json` is created on first save and can be edited by hand. It is
-not tracked by git, being specific to each machine.
+not tracked by git, being specific to each machine; copy
+`wifi_config.example.json` over it to start from a documented set of keys.
+
+The survey shipped in `data/` uses neutral network names, since real SSIDs
+identify the people living around the surveyed area.
 
 | Key | Default | Purpose |
 |---|---|---|
