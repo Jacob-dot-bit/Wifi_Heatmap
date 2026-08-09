@@ -96,6 +96,7 @@ src/collector.py interactive survey (matplotlib)
 src/heatmap_generator.py  interpolation and rendering
 src/utils.py     reading, writing and exporting measurements
 data/            plan.png and mesures.json
+tools/           sample floor plan generator
 output/          rendered heatmaps, thumbnails under .thumbs/
 ```
 
@@ -105,8 +106,12 @@ output/          rendered heatmaps, thumbnails under .thumbs/
 not tracked by git, being specific to each machine; copy
 `wifi_config.example.json` over it to start from a documented set of keys.
 
-The survey shipped in `data/` uses neutral network names, since real SSIDs
-identify the people living around the surveyed area.
+The survey shipped in `data/` uses neutral network names, and `data/plan.png`
+is a drawn floor plan rather than a real building: network names and a picture
+of the place together would pinpoint a home and name its neighbours. Rebuild it
+with `python3 tools/make_sample_plan.py`. To survey a real site, drop your own
+image in `data/` as `plan.local.png` — that pattern is ignored by git — and
+point `plan_path` at it.
 
 | Key | Default | Purpose |
 |---|---|---|
