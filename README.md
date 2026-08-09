@@ -109,9 +109,34 @@ not tracked by git, being specific to each machine; copy
 The survey shipped in `data/` uses neutral network names, and `data/plan.png`
 is a drawn floor plan rather than a real building: network names and a picture
 of the place together would pinpoint a home and name its neighbours. Rebuild it
-with `python3 tools/make_sample_plan.py`. To survey a real site, drop your own
-image in `data/` as `plan.local.png` — that pattern is ignored by git — and
-point `plan_path` at it.
+with `python3 tools/make_sample_plan.py`.
+
+### Working with real data
+
+Anything matching `data/*.local.*` is ignored by git, so real material can sit
+next to the sample without ever being committed:
+
+```
+data/plan.local.png      your own floor plan or aerial view
+data/mesures.local.json  a survey holding real network names
+```
+
+Point both settings at them to switch over, and back to the defaults to share
+the project:
+
+```json
+{
+  "plan_path": "data/plan.local.png",
+  "measurements_path": "data/mesures.local.json"
+}
+```
+
+Change **both** together. Surveying against a real plan while
+`measurements_path` still points at `data/mesures.json` would write real SSIDs
+straight into the tracked sample.
+
+Rendered maps land in `output/`, which is ignored as well, so they never reach
+the repository whichever data you survey.
 
 | Key | Default | Purpose |
 |---|---|---|
