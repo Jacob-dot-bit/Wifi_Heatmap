@@ -1,4 +1,4 @@
-"""Scan des réseaux WiFi via la commande `iw`."""
+"""WiFi scanning through the `iw` command."""
 
 import subprocess
 import re
@@ -26,10 +26,10 @@ class WiFiScanner:
             return False
 
     def scan_all(self) -> Dict[str, float]:
-        """Scanne le WiFi et retourne {SSID: meilleur RSSI}, vide si erreur."""
+        """Scan and return {SSID: strongest RSSI}, empty on failure."""
         try:
             if not self._check_sudo():
-                logger.error("sudo requis pour le scan (sans mot de passe)")
+                logger.error("passwordless sudo is required to scan")
                 return {}
 
             out = subprocess.check_output(
@@ -39,13 +39,13 @@ class WiFiScanner:
                 text=True,
             )
         except subprocess.TimeoutExpired:
-            logger.error(f"Délai de scan dépassé ({self.timeout} s)")
+            logger.error(f"scan timed out after {self.timeout} s")
             return {}
         except FileNotFoundError:
-            logger.error("'iw' introuvable (sudo apt install iw)")
+            logger.error("'iw' not found (sudo apt install iw)")
             return {}
         except Exception as e:
-            logger.error(f"Erreur de scan: {e}")
+            logger.error(f"scan failed: {e}")
             return {}
 
         return self._parse_scan_output(out)
@@ -63,6 +63,7 @@ class WiFiScanner:
                 match = re.search(r"signal:\s*([-\d.]+)\s*dBm", line)
                 if match:
                     rssi = float(match.group(1))
+                    # A network may be seen on several bands: keep the best.
                     if current_ssid not in results or rssi > results[current_ssid]:
                         results[current_ssid] = rssi
 
@@ -82,5 +83,5 @@ class WiFiScanner:
                 if "Interface" in line
             ]
         except Exception as e:
-            logger.error(f"Interfaces indisponibles: {e}")
+            logger.error(f"could not list interfaces: {e}")
             return []

@@ -1,165 +1,166 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cartographie WiFi</title>
+<title>WiFi Mapping</title>
 <meta name="author" content="Jakub WERLINSKI">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
 <aside class="sidebar">
-  <div class="brand"><span class="dot"></span> Cartographie WiFi</div>
+  <div class="brand"><span class="dot"></span> <span data-i18n="app.title"></span></div>
   <nav class="nav" id="nav">
-    <button data-view="dashboard" class="active">Vue d'ensemble</button>
-    <button data-view="config">Configuration</button>
-    <button data-view="networks">Réseaux</button>
-    <button data-view="collect">Collecte</button>
-    <button data-view="stats">Statistiques</button>
-    <button data-view="heatmaps">Heatmaps</button>
-    <button data-view="export">Export</button>
+    <button data-view="dashboard" class="active" data-i18n="nav.dashboard"></button>
+    <button data-view="config" data-i18n="nav.config"></button>
+    <button data-view="networks" data-i18n="nav.networks"></button>
+    <button data-view="collect" data-i18n="nav.collect"></button>
+    <button data-view="stats" data-i18n="nav.stats"></button>
+    <button data-view="heatmaps" data-i18n="nav.heatmaps"></button>
+    <button data-view="export" data-i18n="nav.export"></button>
   </nav>
   <div class="sidebar-foot">
-    <div id="foot-iface">interface : --</div>
-    <div id="foot-points">0 point mesuré</div>
-    <div class="author">Jakub WERLINSKI</div>
+    <div id="foot-iface">--</div>
+    <div id="foot-points">--</div>
+    <div class="author" data-i18n="app.author"></div>
   </div>
 </aside>
 
 <main class="main">
   <div class="topbar">
-    <h1>Cartographie WiFi</h1>
+    <h1 data-i18n="app.title"></h1>
     <span class="crumb" id="crumb"></span>
     <span class="spacer"></span>
+    <select id="lang-select" class="lang-select" title="Language"></select>
     <span class="tag" id="tag-iface">--</span>
     <span class="tag" id="tag-status">--</span>
   </div>
 
-  <!-- Vue d'ensemble -->
+  <!-- Overview -->
   <section id="view-dashboard">
     <div class="row" id="dash-stats"></div>
     <div class="row thirds">
       <div class="panel wide">
-        <h2>Signal moyen par réseau</h2>
+        <h2 data-i18n="dash.gauges"></h2>
         <div id="dash-gauges"></div>
       </div>
       <div class="panel">
-        <h2>Couverture</h2>
+        <h2 data-i18n="dash.coverage"></h2>
         <div id="dash-table"></div>
       </div>
     </div>
   </section>
 
-  <!-- Configuration -->
+  <!-- Settings -->
   <section id="view-config" class="hidden">
     <div class="row">
       <div class="panel">
-        <h2>Interface réseau</h2>
+        <h2 data-i18n="config.interface.title"></h2>
         <div class="field">
-          <label for="iface-select">Interface utilisée pour le scan</label>
+          <label for="iface-select" data-i18n="config.interface.label"></label>
           <div class="controls">
             <select id="iface-select"></select>
-            <button id="iface-refresh">Redétecter</button>
+            <button id="iface-refresh" data-i18n="config.interface.refresh"></button>
           </div>
         </div>
         <p class="hint" id="iface-hint"></p>
       </div>
       <div class="panel">
-        <h2>Fichiers</h2>
+        <h2 data-i18n="config.files.title"></h2>
         <div class="field">
-          <label>Plan</label>
+          <label data-i18n="config.files.plan"></label>
           <input type="text" id="cfg-plan" readonly style="width:100%">
         </div>
         <div class="field">
-          <label>Mesures</label>
+          <label data-i18n="config.files.measurements"></label>
           <input type="text" id="cfg-measures" readonly style="width:100%">
         </div>
       </div>
     </div>
     <div class="panel">
-      <h2>Paramètres</h2>
+      <h2 data-i18n="config.params.title"></h2>
       <div class="row">
         <div class="field">
-          <label>Délai maximal du scan : <b id="lbl-timeout"></b> s</label>
+          <label id="lbl-timeout"></label>
           <input type="range" id="cfg-timeout" min="5" max="30" step="1">
         </div>
         <div class="field">
-          <label>Résolution de rendu (DPI) : <b id="lbl-dpi"></b></label>
+          <label id="lbl-dpi"></label>
           <input type="range" id="cfg-dpi" min="72" max="300" step="10">
         </div>
         <div class="field">
-          <label>Finesse d'interpolation : <b id="lbl-res"></b></label>
+          <label id="lbl-res"></label>
           <input type="range" id="cfg-res" min="100" max="800" step="50">
         </div>
       </div>
-      <button id="cfg-save" class="primary">Enregistrer</button>
+      <button id="cfg-save" class="primary" data-i18n="config.save"></button>
     </div>
   </section>
 
-  <!-- Réseaux -->
+  <!-- Networks -->
   <section id="view-networks" class="hidden">
     <div class="row thirds">
       <div class="panel wide">
-        <h2>Réseaux à portée</h2>
+        <h2 data-i18n="networks.scan.title"></h2>
         <div class="controls" style="margin-bottom:10px">
-          <button id="scan-btn">Lancer un scan</button>
-          <button id="scan-add" disabled>Ajouter la sélection</button>
+          <button id="scan-btn" data-i18n="networks.scan.run"></button>
+          <button id="scan-add" disabled data-i18n="networks.scan.add"></button>
         </div>
-        <div id="scan-results"><p class="empty">Aucun scan lancé.</p></div>
+        <div id="scan-results"></div>
       </div>
       <div class="panel">
-        <h2>Ajouter manuellement</h2>
+        <h2 data-i18n="networks.add.title"></h2>
         <div class="controls">
-          <input type="text" id="ssid-input" placeholder="Nom du réseau" style="flex:1">
-          <button id="ssid-add">Ajouter</button>
+          <input type="text" id="ssid-input" data-i18n-placeholder="networks.add.placeholder" style="flex:1">
+          <button id="ssid-add" data-i18n="networks.add.button"></button>
         </div>
-        <h2 style="margin-top:16px">Réseaux suivis (<span id="ssid-count">0</span>)</h2>
+        <h2 style="margin-top:16px" id="ssid-title"></h2>
         <div id="ssid-list"></div>
       </div>
     </div>
   </section>
 
-  <!-- Collecte -->
+  <!-- Survey -->
   <section id="view-collect" class="hidden">
     <div class="row thirds">
       <div class="panel wide">
-        <h2>Plan : cliquez à votre position pour lancer un scan</h2>
+        <h2 data-i18n="collect.plan.title"></h2>
         <div class="plan-wrap" id="plan-wrap">
-          <img id="plan-img" alt="Plan des lieux">
+          <img id="plan-img" data-i18n-alt="collect.plan.alt" alt="">
           <div class="scan-overlay hidden" id="scan-overlay">
-            <span class="spinner"></span><span id="scan-msg">Scan en cours...</span>
+            <span class="spinner"></span><span id="scan-msg"></span>
           </div>
         </div>
       </div>
       <div>
         <div class="stat" id="collect-stat"></div>
         <div class="panel" style="margin-bottom:10px">
-          <h2>Actions</h2>
+          <h2 data-i18n="collect.actions"></h2>
           <div class="controls">
-            <button id="undo-btn" disabled>Annuler le dernier</button>
-            <button id="clear-btn" class="danger" disabled>Tout effacer</button>
-            <button id="save-btn" class="primary" disabled>Enregistrer</button>
+            <button id="undo-btn" disabled data-i18n="collect.undo"></button>
+            <button id="clear-btn" class="danger" disabled data-i18n="collect.clear"></button>
+            <button id="save-btn" class="primary" disabled data-i18n="collect.save"></button>
           </div>
           <p class="hint" style="margin:10px 0 0" id="collect-hint"></p>
         </div>
         <div class="panel">
-          <h2>Dernier point</h2>
-          <div id="last-point"><p class="empty">Aucun point collecté.</p></div>
+          <h2 data-i18n="collect.last"></h2>
+          <div id="last-point"></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Statistiques -->
+  <!-- Statistics -->
   <section id="view-stats" class="hidden">
     <div class="panel">
-      <h2>Détail par réseau</h2>
+      <h2 data-i18n="stats.table.title"></h2>
       <div id="stats-table"></div>
     </div>
     <div class="panel">
-      <h2>Étendue des niveaux mesurés</h2>
-      <p class="hint">La barre va du minimum au maximum relevé ; le repère marque la moyenne.</p>
+      <h2 data-i18n="stats.range.title"></h2>
+      <p class="hint" data-i18n="stats.range.hint"></p>
       <div id="stats-range"></div>
     </div>
   </section>
@@ -167,20 +168,17 @@
   <!-- Heatmaps -->
   <section id="view-heatmaps" class="hidden">
     <div class="panel">
-      <h2>Génération</h2>
+      <h2 data-i18n="heatmaps.generate.title"></h2>
       <div class="controls">
-        <button id="gen-btn" class="primary">Générer les cartes</button>
-        <label for="grid-cols" style="margin:0 0 0 8px">Colonnes</label>
+        <button id="gen-btn" class="primary" data-i18n="heatmaps.generate.button"></button>
+        <label for="grid-cols" style="margin:0 0 0 8px" data-i18n="heatmaps.columns"></label>
         <select id="grid-cols">
           <option value="2">2</option>
           <option value="3">3</option>
           <option value="4" selected>4</option>
           <option value="5">5</option>
         </select>
-        <span class="hint" style="margin:0">
-          Une carte par réseau, à partir des mesures enregistrées.
-          Il faut au moins 3 points par réseau. Cliquez une carte pour l'agrandir.
-        </span>
+        <span class="hint" style="margin:0" data-i18n="heatmaps.hint"></span>
       </div>
     </div>
     <div class="heatmap-grid" id="heatmap-grid"></div>
@@ -190,31 +188,31 @@
   <section id="view-export" class="hidden">
     <div class="row">
       <div class="panel">
-        <h2>Mesures brutes</h2>
-        <p class="hint">Une ligne par couple position / réseau.</p>
+        <h2 data-i18n="export.raw.title"></h2>
+        <p class="hint" data-i18n="export.raw.hint"></p>
         <a href="/api/export/measurements.csv"><button>measurements.csv</button></a>
       </div>
       <div class="panel">
-        <h2>Statistiques agrégées</h2>
-        <p class="hint">Min, moyenne, max et nombre de points par réseau.</p>
+        <h2 data-i18n="export.stats.title"></h2>
+        <p class="hint" data-i18n="export.stats.hint"></p>
         <a href="/api/export/stats.csv"><button>stats.csv</button></a>
       </div>
     </div>
   </section>
 
   <footer class="credits">
-    Cartographie WiFi &mdash; Jakub WERLINSKI
+    <span data-i18n="app.title"></span> &mdash; <span data-i18n="app.author"></span>
   </footer>
 </main>
 
-<!-- Agrandissement d'une carte -->
+<!-- Enlarged map -->
 <div class="modal hidden" id="modal">
   <div class="modal-box">
     <div class="modal-head">
       <b id="modal-title"></b>
       <span class="spacer"></span>
-      <a id="modal-dl" download><button>Télécharger le PNG</button></a>
-      <button id="modal-close">Fermer</button>
+      <a id="modal-dl" download><button data-i18n="heatmaps.download"></button></a>
+      <button id="modal-close" data-i18n="heatmaps.close"></button>
     </div>
     <div class="row" id="modal-stats"></div>
     <img id="modal-img" alt="">

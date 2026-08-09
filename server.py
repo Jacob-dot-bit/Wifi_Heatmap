@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serveur web de la cartographie WiFi (API JSON + page statique)."""
+"""Web server for the WiFi mapping tool (JSON API plus a static page)."""
 
 import io
 import csv
@@ -7,8 +7,8 @@ import sys
 import logging
 from pathlib import Path
 
-# Le serveur tourne sans affichage : matplotlib doit utiliser Agg avant
-# que src.heatmap_generator n'importe pyplot.
+# The server runs headless, so matplotlib must select Agg before
+# src.heatmap_generator imports pyplot.
 import matplotlib
 matplotlib.use("Agg")
 
@@ -18,6 +18,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.config import Config
+from src.i18n import Translator, available_languages, LOCALES_DIR
 from src.scanner import WiFiScanner
 from src.heatmap_generator import HeatmapGenerator
 from src.utils import (
@@ -32,6 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 BASE_DIR = Path(__file__).parent
 app = Flask(__name__, static_folder=None)
 config = Config()
+translator = Translator(config.language)
 
 
 def _stats_payload(measurements, ssids):
@@ -62,6 +64,17 @@ def static_files(filename):
     return send_from_directory(BASE_DIR / "web", filename)
 
 
+@app.get("/locales/<code>.json")
+def locale(code):
+    """Serve a translation catalogue to the browser."""
+    if not code.isalnum():
+        abort(400)
+    path = LOCALES_DIR / f"{code}.json"
+    if not path.exists():
+        abort(404)
+    return send_file(path, mimetype="application/json")
+
+
 @app.get("/plan")
 def plan():
     path = BASE_DIR / config.plan_path
@@ -71,7 +84,7 @@ def plan():
 
 
 def _thumbnail(source: Path, width: int) -> Path:
-    """Vignette mise en cache sur disque, régénérée si la source a changé."""
+    """Disk-cached thumbnail, rebuilt when the source is newer."""
     width = max(80, min(width, 1200))
     cache_dir = source.parent / ".thumbs"
     cache_dir.mkdir(exist_ok=True)
@@ -95,11 +108,11 @@ def heatmap(name):
         try:
             return send_file(_thumbnail(path, width))
         except Exception as e:
-            logging.warning(f"Vignette impossible pour {name}: {e}")
+            logging.warning(f"could not build a thumbnail for {name}: {e}")
     return send_file(path)
 
 
-# --- Configuration ------------------------------------------------------
+# --- Settings -----------------------------------------------------------
 
 @app.get("/api/config")
 def get_config():
@@ -107,6 +120,8 @@ def get_config():
     return jsonify({
         "ssids": config.ssids,
         "interface": config.wifi_interface,
+        "language": config.language,
+        "languages": available_languages(),
         "plan_path": config.plan_path,
         "measurements_path": config.measurements_path,
         "scan_timeout": config.scan_timeout,
@@ -114,7 +129,7 @@ def get_config():
         "heatmap_resolution": config.heatmap_resolution,
         "plan_available": (BASE_DIR / config.plan_path).exists(),
         "valid": valid,
-        "status": msg,
+        "status_key": msg,
     })
 
 
@@ -123,12 +138,18 @@ def set_config():
     data = request.get_json(silent=True) or {}
     if "interface" in data:
         config.wifi_interface = str(data["interface"])
+    if "language" in data:
+        codes = {l["code"] for l in available_languages()}
+        if data["language"] not in codes:
+            return jsonify({"error": "unknown language"}), 400
+        config.language = data["language"]
+        translator.set_language(config.language)
     for key in ("scan_timeout", "heatmap_dpi", "heatmap_resolution"):
         if key in data:
             try:
                 setattr(config, key, int(data[key]))
             except (TypeError, ValueError):
-                return jsonify({"error": f"{key} invalide"}), 400
+                return jsonify({"error": f"invalid {key}"}), 400
     config.save()
     return get_config()
 
@@ -138,7 +159,7 @@ def interfaces():
     return jsonify({"interfaces": WiFiScanner().get_available_interfaces()})
 
 
-# --- SSIDs --------------------------------------------------------------
+# --- Networks -----------------------------------------------------------
 
 @app.post("/api/ssids")
 def add_ssids():
@@ -156,13 +177,12 @@ def remove_ssid(ssid):
     return jsonify({"ssids": config.ssids})
 
 
-# --- Scan ---------------------------------------------------------------
+# --- Scanning -----------------------------------------------------------
 
 @app.post("/api/scan")
 def scan():
     only_targets = bool((request.get_json(silent=True) or {}).get("only_targets"))
-    scanner = WiFiScanner(config.wifi_interface, config.scan_timeout)
-    networks = scanner.scan_all()
+    networks = WiFiScanner(config.wifi_interface, config.scan_timeout).scan_all()
     if only_targets:
         networks = {s: v for s, v in networks.items() if s in config.ssids}
     rows = sorted(
@@ -173,7 +193,7 @@ def scan():
     return jsonify({"networks": rows})
 
 
-# --- Mesures ------------------------------------------------------------
+# --- Measurements -------------------------------------------------------
 
 @app.get("/api/measurements")
 def get_measurements():
@@ -196,7 +216,7 @@ def post_measurements():
         return jsonify({"error": msg}), 400
     if not save_measurements(measurements, config.ssids,
                              config.plan_path, config.measurements_path):
-        return jsonify({"error": "sauvegarde impossible"}), 500
+        return jsonify({"error": "could not save"}), 500
     return jsonify({"saved": len(measurements)})
 
 
@@ -218,7 +238,7 @@ def list_heatmaps():
 def generate_heatmaps():
     ok, measurements, ssids = load_measurements(config.measurements_path)
     if not ok or not measurements:
-        return jsonify({"error": "aucune mesure"}), 400
+        return jsonify({"error": "no measurement"}), 400
     valid, msg = validate_measurements(measurements)
     if not valid:
         return jsonify({"error": msg}), 400
@@ -232,6 +252,8 @@ def generate_heatmaps():
             auto_tune=config.rbf_auto_tune,
             fade=config.fade_extrapolation,
             fade_factor=config.fade_factor,
+            translator=translator,
+            author=translator.t("app.author"),
         )
         (BASE_DIR / config.output_dir).mkdir(exist_ok=True)
         done, total = gen.generate_all(measurements, ssids, config.output_dir)
@@ -275,5 +297,5 @@ def export_stats():
 
 
 if __name__ == "__main__":
-    print("Interface disponible sur http://127.0.0.1:5000")
+    print("Available at http://127.0.0.1:5000")
     app.run(host="127.0.0.1", port=5000, debug=False)

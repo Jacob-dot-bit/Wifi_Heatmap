@@ -1,4 +1,4 @@
-"""Génération des heatmaps par interpolation RBF sur le plan."""
+"""Heatmap rendering from radial basis function interpolation."""
 
 import logging
 from pathlib import Path
@@ -9,15 +9,16 @@ import matplotlib.image as mpimg
 from scipy.interpolate import RBFInterpolator
 from scipy.spatial import cKDTree
 
+from .i18n import Translator
+
 logger = logging.getLogger(__name__)
 
-# Noyaux comparés lors du calibrage. Les multiplicateurs de lissage sont
-# exprimés en fraction de la taille du plan pour rester valables quelle que
-# soit la résolution de l'image.
+# Kernels compared during calibration. Smoothing multipliers are expressed
+# as a fraction of the plan size so they hold at any image resolution.
 KERNELS = ("linear", "thin_plate_spline")
 SMOOTHING_RATIOS = (0.001, 0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 20.0, 100.0)
 
-# En dessous de ce nombre de points, la validation croisée n'est pas fiable.
+# Below this many points, cross-validation is not trustworthy.
 MIN_POINTS_TUNING = 5
 
 
@@ -32,6 +33,8 @@ class HeatmapGenerator:
         auto_tune: bool = True,
         fade: bool = True,
         fade_factor: float = 2.5,
+        translator: Translator = None,
+        author: str = "",
     ):
         self.plan_path = plan_path
         self.dpi = dpi
@@ -41,18 +44,20 @@ class HeatmapGenerator:
         self.auto_tune = auto_tune
         self.fade = fade
         self.fade_factor = fade_factor
+        self.tr = translator or Translator()
+        self.author = author
 
         try:
             self.plan = mpimg.imread(plan_path)
             self.h, self.w = self.plan.shape[:2]
         except Exception as e:
-            logger.error(f"Chargement du plan impossible: {e}")
+            logger.error(f"could not read the floor plan: {e}")
             raise
 
-    # --- Choix du modèle ---------------------------------------------------
+    # --- Model selection ---------------------------------------------------
 
     def _loocv_rmse(self, points, values, kernel, smoothing) -> float:
-        """Erreur de prédiction en laissant chaque point de côté à son tour."""
+        """Prediction error when leaving each point out in turn."""
         errors = []
         for i in range(len(points)):
             keep = np.arange(len(points)) != i
@@ -66,52 +71,50 @@ class HeatmapGenerator:
         return float(np.sqrt(np.mean(np.square(errors))))
 
     def _fit(self, points, values):
-        """Ajuste le modèle, en calibrant noyau et lissage si possible.
+        """Fit the model, calibrating kernel and smoothing when possible.
 
-        Retourne (modèle, description). Un lissage trop faible fait osciller
-        l'interpolation entre des mesures naturellement bruitées ; la
-        validation croisée choisit le compromis à partir des données.
+        Returns (model, description). Too little smoothing makes the surface
+        oscillate between readings that are noisy by nature; cross-validation
+        picks the trade-off from the data itself.
         """
         scale = float(max(self.w, self.h))
         candidates = [(k, r * scale) for k in KERNELS for r in SMOOTHING_RATIOS]
 
         if not self.auto_tune or len(points) < MIN_POINTS_TUNING:
-            kernel, smoothing = "linear", scale  # compromis sur peu de points
+            kernel, smoothing = "linear", scale  # safe middle ground
             model = RBFInterpolator(points, values, kernel=kernel, smoothing=smoothing)
-            return model, f"{kernel}/{smoothing:.3g} (défaut)"
+            return model, f"{kernel}/{smoothing:.3g} ({self.tr.t('map.default')})"
 
         best = min(candidates, key=lambda c: self._loocv_rmse(points, values, *c))
         kernel, smoothing = best
         rmse = self._loocv_rmse(points, values, kernel, smoothing)
 
-        # Référence : ignorer la position et prédire la moyenne. Si le modèle
-        # ne fait pas mieux, autant l'annoncer dans le journal.
+        # Baseline: ignore position and predict the mean. Worth reporting when
+        # the interpolation does not beat it.
         baseline = float(np.sqrt(np.mean([
             (values[np.arange(len(values)) != i].mean() - values[i]) ** 2
             for i in range(len(values))
         ])))
         if rmse > baseline:
-            logger.info(
-                "Interpolation peu informative pour ce jeu de points "
-                f"(RMSE {rmse:.1f} dB contre {baseline:.1f} dB pour la moyenne)."
-            )
+            logger.info(self.tr.t("map.uninformative",
+                                  rmse=f"{rmse:.1f}", baseline=f"{baseline:.1f}"))
 
         model = RBFInterpolator(points, values, kernel=kernel, smoothing=smoothing)
         return model, f"{kernel}/{smoothing:.3g}, RMSE {rmse:.1f} dB"
 
-    # --- Couverture --------------------------------------------------------
+    # --- Coverage ----------------------------------------------------------
 
     def _coverage_alpha(self, points, grid_xy, shape):
-        """Opacité décroissante à mesure qu'on s'éloigne des mesures.
+        """Opacity falling off with distance to the nearest reading.
 
-        Sans cela, la carte peint une couleur franche sur des zones jamais
-        mesurées, où l'interpolation ne fait qu'extrapoler.
+        Without it the map paints solid colour over areas that were never
+        visited, where the interpolation is only extrapolating.
         """
         tree = cKDTree(points)
         distance, _ = tree.query(grid_xy)
         distance = distance.reshape(shape)
 
-        # Distance caractéristique entre mesures voisines.
+        # Typical spacing between neighbouring readings.
         if len(points) > 1:
             neighbour, _ = cKDTree(points).query(points, k=2)
             spacing = float(np.median(neighbour[:, 1]))
@@ -124,7 +127,7 @@ class HeatmapGenerator:
         ramp = np.clip((outer - distance) / (outer - inner), 0.0, 1.0)
         return ramp * self.alpha
 
-    # --- Rendu -------------------------------------------------------------
+    # --- Rendering ---------------------------------------------------------
 
     def generate(
         self,
@@ -132,7 +135,7 @@ class HeatmapGenerator:
         ssid: str,
         output_file: str = None,
     ) -> Tuple[bool, str]:
-        """Génère une heatmap pour un SSID. Retourne (succès, message)."""
+        """Render one network's heatmap. Returns (ok, message)."""
         if output_file is None:
             output_file = f"heatmap_{ssid.replace(' ', '_')}.png"
 
@@ -143,7 +146,7 @@ class HeatmapGenerator:
         ]
 
         if len(pts) < 3:
-            msg = f"{ssid} : pas assez de points ({len(pts)}), 3 minimum."
+            msg = self.tr.t("map.notenough", ssid=ssid, count=len(pts))
             logger.warning(msg)
             return False, msg
 
@@ -184,16 +187,8 @@ class HeatmapGenerator:
             )
 
             ax.scatter(
-                xs,
-                ys,
-                c=zs,
-                cmap="RdYlGn",
-                vmin=-85,
-                vmax=-35,
-                s=90,
-                edgecolors="black",
-                linewidths=0.8,
-                zorder=3,
+                xs, ys, c=zs, cmap="RdYlGn", vmin=-85, vmax=-35,
+                s=90, edgecolors="black", linewidths=0.8, zorder=3,
             )
 
             for p in pts:
@@ -208,39 +203,42 @@ class HeatmapGenerator:
                 )
 
             cbar = plt.colorbar(hm, ax=ax, fraction=0.03, pad=0.02)
-            cbar.set_label("Signal (dBm)", fontsize=11)
+            cbar.set_label(self.tr.t("map.colorbar"), fontsize=11)
             cbar.set_ticks([-85, -75, -65, -55, -45, -35])
-            cbar.set_ticklabels(
-                ["-85\n(très faible)", "-75", "-65", "-55\n(moyen)", "-45", "-35\n(bon)"]
-            )
+            cbar.set_ticklabels([
+                self.tr.t("map.scale.low"), "-75", "-65",
+                self.tr.t("map.scale.mid"), "-45", self.tr.t("map.scale.high"),
+            ])
 
             min_r, max_r, moy_r = zs.min(), zs.max(), zs.mean()
-            subtitle = f"{len(pts)} points  |  {model_desc}"
+            subtitle = self.tr.t("map.model", count=len(pts), model=model_desc)
             if self.fade:
-                subtitle += "  |  zones non mesurées estompées"
+                subtitle += "  |  " + self.tr.t("map.faded")
             ax.set_title(
-                f"Heatmap WiFi - {ssid}\n"
-                f"Min: {min_r:.0f} dBm  |  Max: {max_r:.0f} dBm  |  "
-                f"Moy: {moy_r:.1f} dBm\n{subtitle}",
+                self.tr.t("map.title", ssid=ssid) + "\n"
+                + self.tr.t("map.subtitle", min=f"{min_r:.0f}",
+                            max=f"{max_r:.0f}", mean=f"{moy_r:.1f}")
+                + "\n" + subtitle,
                 fontsize=11,
             )
             ax.axis("off")
-            fig.text(0.99, 0.01, "Jakub WERLINSKI", ha="right", va="bottom",
-                     fontsize=7, color="0.45")
+            if self.author:
+                fig.text(0.99, 0.01, self.author, ha="right", va="bottom",
+                         fontsize=7, color="0.45")
             plt.tight_layout()
             plt.savefig(output_file, dpi=self.dpi, bbox_inches="tight")
             plt.close()
 
             msg = (
                 f"{ssid:<30} -> {output_file} "
-                f"(min {min_r:.0f} / moy {moy_r:.1f} / max {max_r:.0f} dBm, {model_desc})"
+                f"(min {min_r:.0f} / mean {moy_r:.1f} / max {max_r:.0f} dBm, {model_desc})"
             )
             logger.info(msg)
             return True, msg
 
         except Exception as e:
             plt.close("all")
-            msg = f"Erreur pour {ssid}: {e}"
+            msg = f"{ssid}: {e}"
             logger.error(msg)
             return False, msg
 
@@ -250,7 +248,7 @@ class HeatmapGenerator:
         ssids: List[str],
         output_dir: str = ".",
     ) -> Tuple[int, int]:
-        """Génère une heatmap par SSID. Retourne (succès, total)."""
+        """Render one heatmap per network. Returns (rendered, total)."""
         Path(output_dir).mkdir(exist_ok=True)
         success_count = 0
 
@@ -261,5 +259,5 @@ class HeatmapGenerator:
                 success_count += 1
             print(msg)
 
-        print(f"{success_count}/{len(ssids)} heatmaps générées")
+        print(self.tr.t("map.done", done=success_count, total=len(ssids)))
         return success_count, len(ssids)

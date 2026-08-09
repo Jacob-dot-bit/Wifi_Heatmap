@@ -1,6 +1,7 @@
-"""Modules de la cartographie WiFi."""
+"""WiFi mapping modules."""
 
 from .config import Config
+from .i18n import Translator, available_languages
 from .scanner import WiFiScanner
 from .collector import InteractiveCollector
 from .heatmap_generator import HeatmapGenerator
@@ -14,6 +15,8 @@ from .utils import (
 
 __all__ = [
     "Config",
+    "Translator",
+    "available_languages",
     "WiFiScanner",
     "InteractiveCollector",
     "HeatmapGenerator",

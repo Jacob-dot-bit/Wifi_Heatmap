@@ -1,128 +1,145 @@
-# Cartographie WiFi
+# WiFi Mapping
 
-Relève la puissance du signal WiFi à différents endroits d'un lieu et génère une
-carte de chaleur par réseau, superposée à un plan ou à une vue aérienne.
+Measures WiFi signal strength at chosen spots and renders one heatmap per
+network on top of a floor plan or aerial view.
 
-Deux interfaces partagent le même code métier (`src/`) :
+Two front-ends share the same core (`src/`):
 
-- **web** (`server.py` + `web/`) : Flask et une page HTML/CSS/JS. Interface
-  principale, avec collecte au clic sur le plan.
-- **ligne de commande** (`main.py`) : mêmes fonctions dans un menu texte, la
-  collecte se faisant dans une fenêtre matplotlib.
+- **web** (`server.py` + `web/`): Flask plus a plain HTML/CSS/JS page. This is
+  the main interface; the survey works by clicking on the plan.
+- **command line** (`main.py`): the same features in a text menu, with the
+  survey running in a matplotlib window.
 
-## Prérequis
+The interface ships in English and French, and any other language can be added
+without touching the code — see [Translations](#translations).
 
-- Python 3 avec `numpy`, `matplotlib`, `scipy`, `flask`, `pillow`
-- `iw` pour le scan (`sudo apt install iw`)
-- `sudo` sans mot de passe pour `iw`, sinon le scan échoue :
+Author: Jakub WERLINSKI.
+
+## Requirements
+
+- Python 3 with `numpy`, `matplotlib`, `scipy`, `flask`, `pillow`
+- `iw` for scanning (`sudo apt install iw`)
+- passwordless `sudo` for `iw`, otherwise every scan fails:
 
   ```
-  # dans sudo visudo
-  monuser ALL=(ALL) NOPASSWD: /usr/sbin/iw
+  # in sudo visudo
+  youruser ALL=(ALL) NOPASSWD: /usr/sbin/iw
   ```
 
-Sous Kali/Debian, les paquets Python passent par apt :
+On Kali/Debian the Python packages come from apt:
 
 ```
 sudo apt install python3-numpy python3-matplotlib python3-scipy \
                  python3-flask python3-pil
 ```
 
-## Utilisation
+## Usage
 
 ```
-./run_web.sh        # puis http://127.0.0.1:5000
+./run_web.sh        # then open http://127.0.0.1:5000
 ```
 
-Déroulé : *Configuration* pour choisir l'interface WiFi, *Réseaux* pour
-sélectionner les SSID à suivre, *Collecte* pour cliquer sur le plan à chaque
-position (un scan se déclenche et le point s'ajoute), puis *Heatmaps*.
+Pick the WiFi interface under *Settings*, choose the networks to follow under
+*Networks*, then click your position on the plan under *Survey* — each click
+triggers a scan and records a point. *Heatmaps* renders the maps.
 
-Les points collectés ne sont écrits sur disque qu'au clic sur **Enregistrer**.
+Collected points stay in the browser until you press **Save**.
 
-Version en ligne de commande : `./run.sh`.
+Command line version: `./run.sh`.
 
-## Méthode
+## Translations
 
-À chaque clic, `iw dev <interface> scan` est lancé et la meilleure valeur RSSI
-de chaque réseau suivi est retenue. La position est stockée en coordonnées
-relatives dans `[0,1]`, ce qui rend les mesures indépendantes de la taille de
-l'image.
+The active language is stored in `wifi_config.json` and can be changed from the
+language selector in the top bar, or from entry 8 of the command line menu.
+Both front-ends and the generated map labels follow the setting.
 
-La carte de chaleur interpole ces points par fonctions de base radiales
-(`scipy.interpolate.RBFInterpolator`). Deux garde-fous sont appliqués :
+Catalogues live in `locales/<code>.json` as flat key/value pairs. Adding a
+language means copying `locales/en.json`, translating the values, and setting
+`language.name` to the label shown in the picker — the file is picked up
+automatically. Missing keys fall back to English, so a partial translation
+degrades gracefully instead of breaking a screen.
 
-**Calibrage automatique.** Le noyau et le lissage sont choisis par validation
-croisée *leave-one-out*, réseau par réseau, parmi deux noyaux et neuf niveaux
-de lissage. Un lissage trop faible fait osciller l'interpolation entre des
-mesures naturellement bruitées ; trop fort, elle s'aplatit sur la moyenne. Le
-titre de chaque carte indique le modèle retenu et son erreur quadratique
-moyenne, ce qui permet de juger la fiabilité du résultat.
+## Method
 
-**Estompage des zones non mesurées.** L'opacité décroît avec la distance à la
-mesure la plus proche, l'échelle étant déduite de l'espacement médian entre
-points voisins. Sans cela, la carte peindrait une couleur franche sur des zones
-où l'interpolation ne fait qu'extrapoler.
+Each click runs `iw dev <interface> scan` and keeps the strongest RSSI seen for
+every tracked network. Positions are stored as relative coordinates in `[0,1]`,
+which keeps the survey independent of the image size.
 
-Il faut au moins 3 points pour tracer la carte d'un réseau ; en dessous de 5,
-la validation croisée n'est pas fiable et un réglage prudent est utilisé.
-Comme le signal varie de plusieurs dB au même endroit, mieux vaut répartir les
-points sur toute la surface plutôt que de les concentrer le long d'un trajet.
+The heatmap interpolates those readings with radial basis functions
+(`scipy.interpolate.RBFInterpolator`), with two safeguards:
 
-## Structure
+**Automatic calibration.** Kernel and smoothing are chosen per network by
+leave-one-out cross-validation over two kernels and nine smoothing levels. Too
+little smoothing makes the surface oscillate between readings that are noisy by
+nature; too much flattens it onto the mean. Each map's title reports the chosen
+model and its RMSE, so the result can be judged rather than trusted blindly.
+
+**Faded extrapolation.** Opacity falls off with distance to the nearest
+reading, scaled from the median spacing between neighbouring points. Without
+it the map would paint solid colour over areas that were never visited.
+
+A network needs at least 3 points to be mapped, and at least 5 for
+cross-validation to mean anything. Since the signal varies by several dB at a
+fixed spot, spreading points across the whole area beats walking a single line.
+
+## Layout
 
 ```
-server.py        API JSON et service des fichiers statiques
-web/             page, styles et logique côté navigateur
-main.py          interface en ligne de commande
-src/config.py    configuration, persistée en JSON
-src/scanner.py   scan des réseaux via iw
-src/collector.py collecte interactive (matplotlib)
-src/heatmap_generator.py  interpolation et rendu
-src/utils.py     lecture, écriture et export des mesures
-data/            plan.png et mesures.json
-output/          heatmaps générées, et leurs vignettes dans .thumbs/
+server.py        JSON API and static file serving
+web/             page, styles and browser logic
+main.py          command line interface
+locales/         translation catalogues
+src/config.py    settings, persisted as JSON
+src/i18n.py      catalogue loading and lookup
+src/scanner.py   network scanning through iw
+src/collector.py interactive survey (matplotlib)
+src/heatmap_generator.py  interpolation and rendering
+src/utils.py     reading, writing and exporting measurements
+data/            plan.png and mesures.json
+output/          rendered heatmaps, thumbnails under .thumbs/
 ```
 
-## Configuration
+## Settings
 
-`wifi_config.json` est créé au premier enregistrement et peut être édité à la
-main. Il n'est pas versionné, étant propre à chaque machine.
+`wifi_config.json` is created on first save and can be edited by hand. It is
+not tracked by git, being specific to each machine.
 
-| Clé | Défaut | Rôle |
+| Key | Default | Purpose |
 |---|---|---|
-| `ssids` | `[]` | réseaux suivis lors de la collecte |
-| `wifi_interface` | `wlan0` | interface utilisée pour le scan |
-| `plan_path` | `data/plan.png` | image de fond |
-| `measurements_path` | `data/mesures.json` | fichier des mesures |
-| `output_dir` | `output` | dossier des cartes générées |
-| `scan_timeout` | `15` | délai maximal d'un scan, en secondes |
-| `heatmap_dpi` | `150` | résolution du PNG produit |
-| `heatmap_resolution` | `400` | finesse de la grille d'interpolation |
-| `heatmap_alpha` | `0.55` | opacité de la couleur sur les zones mesurées |
-| `rbf_auto_tune` | `true` | calibrage par validation croisée |
-| `rbf_smoothing` | `1.0` | lissage fixe, utilisé si `rbf_auto_tune` est `false` |
-| `fade_extrapolation` | `true` | estompage des zones non mesurées |
-| `fade_factor` | `2.5` | étendue de l'estompage ; plus bas resserre la couleur |
+| `ssids` | `[]` | networks followed during a survey |
+| `wifi_interface` | `wlan0` | interface used for scanning |
+| `language` | `en` | interface language, matching a file in `locales/` |
+| `plan_path` | `data/plan.png` | background image |
+| `measurements_path` | `data/mesures.json` | survey file |
+| `output_dir` | `output` | where maps are written |
+| `scan_timeout` | `15` | longest a scan may take, in seconds |
+| `heatmap_dpi` | `150` | resolution of the rendered PNG |
+| `heatmap_resolution` | `400` | interpolation grid size |
+| `heatmap_alpha` | `0.55` | colour opacity over measured areas |
+| `rbf_auto_tune` | `true` | calibrate by cross-validation |
+| `rbf_smoothing` | `1.0` | fixed smoothing, used when `rbf_auto_tune` is `false` |
+| `fade_extrapolation` | `true` | fade out unmeasured areas |
+| `fade_factor` | `2.5` | how far the fade reaches; lower tightens the colour |
 
 ## API
 
-| Méthode | Route | Rôle |
+| Method | Route | Purpose |
 |---|---|---|
-| GET | `/api/config` | configuration courante |
-| POST | `/api/config` | interface, timeout, DPI, résolution |
-| GET | `/api/interfaces` | interfaces WiFi détectées |
-| POST | `/api/ssids` | ajoute un ou plusieurs SSID |
-| DELETE | `/api/ssids/<ssid>` | retire un SSID |
-| POST | `/api/scan` | lance un scan et renvoie les RSSI |
-| GET/POST | `/api/measurements` | lit / enregistre les mesures |
-| GET/POST | `/api/heatmaps` | liste / génère les cartes |
-| GET | `/heatmap/<nom>` | une carte ; `?w=560` renvoie une vignette |
-| GET | `/api/export/*.csv` | export CSV |
+| GET | `/api/config` | current settings and available languages |
+| POST | `/api/config` | interface, language, timeout, DPI, grid size |
+| GET | `/api/interfaces` | detected WiFi interfaces |
+| POST | `/api/ssids` | add one or more networks |
+| DELETE | `/api/ssids/<ssid>` | stop following a network |
+| POST | `/api/scan` | run a scan and return the RSSI values |
+| GET/POST | `/api/measurements` | read / save the survey |
+| GET/POST | `/api/heatmaps` | list / render the maps |
+| GET | `/heatmap/<name>` | one map; `?w=560` returns a thumbnail |
+| GET | `/locales/<code>.json` | a translation catalogue |
+| GET | `/api/export/*.csv` | CSV export |
 
-## Format des mesures
+## Measurement format
 
-`data/mesures.json` : positions normalisées dans `[0,1]` et RSSI en dBm.
+`data/mesures.json` holds positions normalised to `[0,1]` and RSSI in dBm.
 
 ```json
 {
@@ -136,12 +153,11 @@ main. Il n'est pas versionné, étant propre à chaque machine.
 }
 ```
 
-## Limites connues
+## Known limits
 
-Le serveur Flask est celui de développement, prévu pour un usage local sur
-`127.0.0.1` ; il n'est pas conçu pour être exposé sur un réseau.
+The Flask development server is meant for local use on `127.0.0.1`; it is not
+built to be exposed on a network.
 
-L'interpolation ignore la géométrie des lieux : elle ne connaît ni les murs ni
-l'atténuation logarithmique avec la distance. Sur un jeu de points épars, elle
-ne fait guère mieux que la moyenne du réseau, ce que le RMSE affiché sur chaque
-carte permet de constater.
+The interpolation knows nothing about the geometry of the place — neither walls
+nor the logarithmic fall-off with distance. On a sparse survey it barely beats
+predicting the network average, which the RMSE printed on each map makes plain.

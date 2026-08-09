@@ -1,12 +1,14 @@
 "use strict";
 
-// Bornes d'affichage des jauges, en dBm.
+// Gauge display bounds, in dBm.
 const DBM_MIN = -100;
 const DBM_MAX = -30;
 
-// Largeur des vignettes demandée au serveur. Généreuse par rapport à la
-// taille d'affichage pour rester net sur les écrans haute densité.
+// Thumbnail width requested from the server. Generous next to the display
+// size so tiles stay sharp on high density screens.
 const THUMB_W = 560;
+
+const FALLBACK_LANG = "en";
 
 const COLORS = {
   green: "#73bf69",
@@ -22,18 +24,33 @@ const state = {
   measurements: [],
   ssids: [],
   stats: [],
-  scanned: [],
+  scanned: null,
   heatmaps: [],
   dirty: false,
   scanning: false,
+  view: "dashboard",
+  lang: FALLBACK_LANG,
+  catalogue: {},
+  fallback: {},
 };
 
-// ---------- Utilitaires ----------
+// ---------- Helpers ----------
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/** Look a key up in the active catalogue, then English, then the key itself. */
+function t(key, params) {
+  let text = state.catalogue[key] || state.fallback[key] || key;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.replaceAll("{" + name + "}", value);
+    }
+  }
+  return text;
+}
 
 function signalColor(dbm) {
   if (dbm >= -60) return COLORS.green;
@@ -43,10 +60,10 @@ function signalColor(dbm) {
 }
 
 function signalLabel(dbm) {
-  if (dbm >= -60) return "bon";
-  if (dbm >= -70) return "correct";
-  if (dbm >= -80) return "faible";
-  return "très faible";
+  if (dbm >= -60) return t("signal.good");
+  if (dbm >= -70) return t("signal.fair");
+  if (dbm >= -80) return t("signal.weak");
+  return t("signal.verypoor");
 }
 
 function ratio(dbm) {
@@ -74,12 +91,48 @@ async function api(url, options = {}) {
     data = null;
   }
   if (!res.ok) {
-    throw new Error((data && data.error) || `Erreur ${res.status}`);
+    throw new Error((data && data.error) || t("error.generic", { status: res.status }));
   }
   return data;
 }
 
-// ---------- Fragments réutilisables ----------
+// ---------- Translations ----------
+
+async function fetchCatalogue(code) {
+  try {
+    const res = await fetch(`/locales/${code}.json`);
+    return res.ok ? await res.json() : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+async function loadLanguage(code) {
+  if (!Object.keys(state.fallback).length) {
+    state.fallback = await fetchCatalogue(FALLBACK_LANG);
+  }
+  state.lang = code || FALLBACK_LANG;
+  state.catalogue =
+    state.lang === FALLBACK_LANG ? state.fallback : await fetchCatalogue(state.lang);
+  document.documentElement.lang = state.lang;
+  applyStaticTranslations();
+}
+
+/** Fill every element carrying a data-i18n attribute. */
+function applyStaticTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll("[data-i18n-alt]").forEach((el) => {
+    el.alt = t(el.dataset.i18nAlt);
+  });
+  document.title = t("app.title");
+}
+
+// ---------- Reusable fragments ----------
 
 function statCard(label, value, { unit = "", sub = "", color = COLORS.blue } = {}) {
   return `<div class="stat">
@@ -95,9 +148,7 @@ function statCard(label, value, { unit = "", sub = "", color = COLORS.blue } = {
 function gauge(name, dbm, { checkbox = false } = {}) {
   const color = signalColor(dbm);
   const pct = (ratio(dbm) * 100).toFixed(1);
-  const box = checkbox
-    ? `<input type="checkbox" value="${esc(name)}">`
-    : "";
+  const box = checkbox ? `<input type="checkbox" value="${esc(name)}">` : "";
   return `<label class="gauge ${checkbox ? "selectable" : ""}">
     ${box}
     <span class="name" title="${esc(name)}">${esc(name)}</span>
@@ -110,7 +161,7 @@ function gauge(name, dbm, { checkbox = false } = {}) {
 }
 
 function statsTable(rows) {
-  if (!rows.length) return `<p class="empty">Aucune donnée.</p>`;
+  if (!rows.length) return `<p class="empty">${esc(t("table.empty"))}</p>`;
   const body = rows
     .map(
       (r) => `<tr>
@@ -124,18 +175,26 @@ function statsTable(rows) {
     )
     .join("");
   return `<table>
-    <thead><tr><th>Réseau</th><th>Min</th><th>Moy</th><th>Max</th><th>Pts</th></tr></thead>
+    <thead><tr>
+      <th>${esc(t("table.network"))}</th><th>${esc(t("table.min"))}</th>
+      <th>${esc(t("table.mean"))}</th><th>${esc(t("table.max"))}</th>
+      <th>${esc(t("table.points"))}</th>
+    </tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 }
 
-// ---------- Chargement des données ----------
+// ---------- Data loading ----------
 
 async function loadConfig() {
   state.config = await api("/api/config");
   $("#tag-iface").textContent = state.config.interface;
-  $("#tag-status").textContent = state.config.valid ? "prêt" : state.config.status;
-  $("#foot-iface").textContent = "interface : " + state.config.interface;
+  $("#tag-status").textContent = state.config.valid
+    ? t("status.ready")
+    : t(state.config.status_key);
+  $("#foot-iface").textContent = t("topbar.interface", {
+    interface: state.config.interface,
+  });
 }
 
 async function loadMeasurements() {
@@ -143,13 +202,12 @@ async function loadMeasurements() {
   if (!state.dirty) state.measurements = data.measurements;
   state.ssids = data.ssids;
   state.stats = data.stats;
-  $("#foot-points").textContent =
-    `${state.measurements.length} point${state.measurements.length > 1 ? "s" : ""} mesuré${
-      state.measurements.length > 1 ? "s" : ""
-    }`;
+  $("#foot-points").textContent = t("topbar.points", {
+    count: state.measurements.length,
+  });
 }
 
-// ---------- Vues ----------
+// ---------- Views ----------
 
 function renderDashboard() {
   const stats = state.stats;
@@ -158,28 +216,28 @@ function renderDashboard() {
   const avg = means.length ? means.reduce((a, b) => a + b, 0) / means.length : null;
 
   $("#dash-stats").innerHTML =
-    statCard("Points mesurés", state.measurements.length) +
-    statCard("Réseaux suivis", stats.length, {
-      sub: `${state.config.ssids.length} configurés`,
+    statCard(t("dash.points"), state.measurements.length) +
+    statCard(t("dash.networks"), stats.length, {
+      sub: t("dash.networks.sub", { count: state.config.ssids.length }),
     }) +
     (best
-      ? statCard("Meilleur réseau", best.mean.toFixed(0), {
+      ? statCard(t("dash.best"), best.mean.toFixed(0), {
           unit: "dBm",
           sub: best.ssid,
           color: signalColor(best.mean),
         })
-      : statCard("Meilleur réseau", "--", { color: COLORS.dim })) +
+      : statCard(t("dash.best"), "--", { color: COLORS.dim })) +
     (avg !== null
-      ? statCard("Signal moyen", avg.toFixed(1), {
+      ? statCard(t("dash.average"), avg.toFixed(1), {
           unit: "dBm",
           sub: signalLabel(avg),
           color: signalColor(avg),
         })
-      : statCard("Signal moyen", "--", { color: COLORS.dim }));
+      : statCard(t("dash.average"), "--", { color: COLORS.dim }));
 
   $("#dash-gauges").innerHTML = stats.length
     ? stats.map((s) => gauge(s.ssid, s.mean)).join("")
-    : `<p class="empty">Aucune mesure. Commencez par la page Collecte.</p>`;
+    : `<p class="empty">${esc(t("dash.empty"))}</p>`;
 
   $("#dash-table").innerHTML = statsTable(stats);
 }
@@ -191,15 +249,21 @@ function renderConfig() {
   $("#cfg-timeout").value = c.scan_timeout;
   $("#cfg-dpi").value = c.heatmap_dpi;
   $("#cfg-res").value = c.heatmap_resolution;
-  $("#lbl-timeout").textContent = c.scan_timeout;
-  $("#lbl-dpi").textContent = c.heatmap_dpi;
-  $("#lbl-res").textContent = c.heatmap_resolution;
+  refreshSliderLabels();
   loadInterfaces();
+}
+
+function refreshSliderLabels() {
+  $("#lbl-timeout").textContent = t("config.params.timeout", {
+    value: $("#cfg-timeout").value,
+  });
+  $("#lbl-dpi").textContent = t("config.params.dpi", { value: $("#cfg-dpi").value });
+  $("#lbl-res").textContent = t("config.params.grid", { value: $("#cfg-res").value });
 }
 
 async function loadInterfaces() {
   const select = $("#iface-select");
-  select.innerHTML = `<option>...</option>`;
+  select.innerHTML = "<option>...</option>";
   try {
     const { interfaces } = await api("/api/interfaces");
     if (interfaces.length) {
@@ -209,32 +273,35 @@ async function loadInterfaces() {
             `<option ${i === state.config.interface ? "selected" : ""}>${esc(i)}</option>`
         )
         .join("");
-      $("#iface-hint").textContent = `${interfaces.length} interface(s) détectée(s).`;
+      $("#iface-hint").textContent = t("config.interface.found", {
+        count: interfaces.length,
+      });
     } else {
       select.innerHTML = `<option>${esc(state.config.interface)}</option>`;
-      $("#iface-hint").textContent =
-        "Aucune interface détectée. Vérifiez que 'iw' est installé et que sudo fonctionne sans mot de passe.";
+      $("#iface-hint").textContent = t("config.interface.none");
     }
   } catch (e) {
     select.innerHTML = `<option>${esc(state.config.interface)}</option>`;
-    $("#iface-hint").textContent = "Détection impossible : " + e.message;
+    $("#iface-hint").textContent = t("config.interface.error", { error: e.message });
   }
 }
 
 function renderNetworks() {
   const list = state.config.ssids;
-  $("#ssid-count").textContent = list.length;
+  $("#ssid-title").textContent = t("networks.tracked", { count: list.length });
   $("#ssid-list").innerHTML = list.length
     ? list
         .map(
           (s, i) => `<div class="list-row">
             <span style="color:var(--dim)">${i + 1}.</span>
             <span class="grow">${esc(s)}</span>
-            <button class="danger" data-remove="${esc(s)}">Retirer</button>
+            <button class="danger" data-remove="${esc(s)}">${esc(
+            t("networks.remove")
+          )}</button>
           </div>`
         )
         .join("")
-    : `<p class="empty">Aucun réseau suivi.</p>`;
+    : `<p class="empty">${esc(t("networks.tracked.empty"))}</p>`;
 
   $("#ssid-list")
     .querySelectorAll("[data-remove]")
@@ -245,15 +312,22 @@ function renderNetworks() {
         });
         await loadConfig();
         renderNetworks();
-        toast("Réseau retiré.", "ok");
+        toast(t("networks.removed"), "ok");
       };
     });
+
+  renderScanResults();
 }
 
 function renderScanResults() {
   const box = $("#scan-results");
+  if (state.scanned === null) {
+    box.innerHTML = `<p class="empty">${esc(t("networks.scan.empty"))}</p>`;
+    $("#scan-add").disabled = true;
+    return;
+  }
   if (!state.scanned.length) {
-    box.innerHTML = `<p class="empty">Aucun réseau détecté.</p>`;
+    box.innerHTML = `<p class="empty">${esc(t("networks.scan.none"))}</p>`;
     $("#scan-add").disabled = true;
     return;
   }
@@ -270,28 +344,9 @@ function renderScanResults() {
   $("#scan-add").disabled = false;
 }
 
-// ---------- Collecte ----------
+// ---------- Survey ----------
 
-function renderCollect() {
-  const points = state.measurements;
-  const img = $("#plan-img");
-  if (!img.src) img.src = "/plan?" + Date.now();
-
-  $("#collect-stat").innerHTML = `
-    <div class="label">Points collectés</div>
-    <div class="value" style="color:${COLORS.orange}">${points.length}</div>
-    <div class="sub">${state.dirty ? "modifications non enregistrées" : "synchronisé"}</div>
-    <div class="glow" style="background:${COLORS.orange}"></div>`;
-
-  $("#undo-btn").disabled = !points.length;
-  $("#clear-btn").disabled = !points.length;
-  $("#save-btn").disabled = !points.length || !state.dirty;
-
-  $("#collect-hint").textContent = state.config.ssids.length
-    ? "Seuls les réseaux suivis sont enregistrés."
-    : "Aucun réseau suivi : ajoutez des SSID avant de collecter.";
-
-  // Repères positionnés en pourcentage : ils suivent le redimensionnement.
+function drawMarkers(points) {
   const wrap = $("#plan-wrap");
   wrap.querySelectorAll(".marker").forEach((m) => m.remove());
   points.forEach((p, i) => {
@@ -302,6 +357,29 @@ function renderCollect() {
     dot.textContent = i + 1;
     wrap.appendChild(dot);
   });
+}
+
+function renderCollect() {
+  const points = state.measurements;
+  const img = $("#plan-img");
+  if (img && !img.src) img.src = "/plan?" + Date.now();
+
+  $("#collect-stat").innerHTML = `
+    <div class="label">${esc(t("collect.points"))}</div>
+    <div class="value" style="color:${COLORS.orange}">${points.length}</div>
+    <div class="sub">${esc(state.dirty ? t("collect.dirty") : t("collect.synced"))}</div>
+    <div class="glow" style="background:${COLORS.orange}"></div>`;
+
+  $("#undo-btn").disabled = !points.length;
+  $("#clear-btn").disabled = !points.length;
+  $("#save-btn").disabled = !points.length || !state.dirty;
+
+  $("#collect-hint").textContent = state.config.ssids.length
+    ? t("collect.hint.ready")
+    : t("collect.hint.nossid");
+
+  // Markers are positioned in percent so they follow any resize.
+  drawMarkers(points);
 
   const last = points[points.length - 1];
   $("#last-point").innerHTML = last
@@ -309,13 +387,13 @@ function renderCollect() {
         .sort((a, b) => b[1] - a[1])
         .map(([ssid, rssi]) => gauge(ssid, rssi))
         .join("")
-    : `<p class="empty">Aucun point collecté.</p>`;
+    : `<p class="empty">${esc(t("collect.last.empty"))}</p>`;
 }
 
 async function onPlanClick(event) {
   if (state.scanning) return;
   if (!state.config.ssids.length) {
-    toast("Ajoutez d'abord des réseaux à suivre.", "warn");
+    toast(t("collect.needssid"), "warn");
     return;
   }
 
@@ -327,12 +405,13 @@ async function onPlanClick(event) {
   state.scanning = true;
   $("#plan-wrap").classList.add("busy");
   $("#scan-overlay").classList.remove("hidden");
+  $("#scan-msg").textContent = t("collect.scanning");
 
   let elapsed = 0;
   const timeout = state.config.scan_timeout;
   const ticker = setInterval(() => {
     elapsed += 1;
-    $("#scan-msg").textContent = `Scan en cours... ${elapsed} s / ${timeout} s max`;
+    $("#scan-msg").textContent = t("collect.scanning.progress", { elapsed, timeout });
   }, 1000);
 
   try {
@@ -341,37 +420,42 @@ async function onPlanClick(event) {
       body: JSON.stringify({ only_targets: true }),
     });
     if (!networks.length) {
-      toast("Aucun réseau suivi détecté ici. Recliquez pour réessayer.", "warn");
+      toast(t("collect.point.none"), "warn");
     } else {
       const signaux = {};
       networks.forEach((n) => (signaux[n.ssid] = n.rssi));
       state.measurements.push({ x, y, signaux });
       state.dirty = true;
-      toast(`Point ${state.measurements.length} : ${networks.length} réseau(x).`, "ok");
+      toast(
+        t("collect.point.added", {
+          index: state.measurements.length,
+          count: networks.length,
+        }),
+        "ok"
+      );
       renderCollect();
     }
   } catch (e) {
-    toast("Scan impossible : " + e.message, "err");
+    toast(t("networks.scan.failed", { error: e.message }), "err");
   } finally {
     clearInterval(ticker);
     state.scanning = false;
     $("#plan-wrap").classList.remove("busy");
     $("#scan-overlay").classList.add("hidden");
-    $("#scan-msg").textContent = "Scan en cours...";
   }
 }
 
-// ---------- Statistiques ----------
+// ---------- Statistics ----------
 
 function renderStats() {
   $("#stats-table").innerHTML = statsTable(state.stats);
 
   if (!state.stats.length) {
-    $("#stats-range").innerHTML = `<p class="empty">Aucune mesure.</p>`;
+    $("#stats-range").innerHTML = `<p class="empty">${esc(t("stats.empty"))}</p>`;
     return;
   }
 
-  // Barre du min au max, avec un repère sur la moyenne.
+  // Bar from minimum to maximum, with a marker on the mean.
   $("#stats-range").innerHTML = state.stats
     .map((s) => {
       const left = ratio(s.min) * 100;
@@ -404,12 +488,12 @@ async function loadHeatmaps() {
 function renderHeatmapGrid() {
   const grid = $("#heatmap-grid");
   if (!state.heatmaps.length) {
-    grid.innerHTML = `<p class="empty">Aucune carte générée.</p>`;
+    grid.innerHTML = `<p class="empty">${esc(t("heatmaps.empty"))}</p>`;
     return;
   }
 
-  // Un seul horodatage pour toutes les vignettes : le cache est invalidé
-  // après une génération, mais les images restent mutualisées ensuite.
+  // One timestamp for every tile: the cache is invalidated after a run,
+  // and the images stay shared afterwards.
   const stamp = state.heatmapStamp || (state.heatmapStamp = Date.now());
 
   grid.innerHTML = state.heatmaps
@@ -417,14 +501,16 @@ function renderHeatmapGrid() {
       const s = state.stats.find((r) => r.ssid === h.ssid);
       const color = s ? signalColor(s.mean) : COLORS.dim;
       const mean = s ? `${s.mean.toFixed(0)} dBm` : "";
-      const meta = s ? `${s.count} points &middot; ${signalLabel(s.mean)}` : "";
+      const meta = s
+        ? `${t("heatmaps.points", { count: s.count })} &middot; ${signalLabel(s.mean)}`
+        : "";
       return `<div class="tile" data-file="${esc(h.file)}">
         <div class="tile-head">
           <span class="name" title="${esc(h.ssid)}">${esc(h.ssid)}</span>
           <span class="mean" style="color:${color}">${mean}</span>
         </div>
         <img src="/heatmap/${encodeURIComponent(h.file)}?w=${THUMB_W}&amp;t=${stamp}"
-             alt="Heatmap ${esc(h.ssid)}">
+             alt="${esc(h.ssid)}">
         <div class="meta">${meta}</div>
       </div>`;
     })
@@ -442,19 +528,25 @@ function openHeatmap(file) {
 
   $("#modal-title").textContent = entry.ssid;
   $("#modal-dl").href = "/heatmap/" + encodeURIComponent(entry.file);
-  // La fenêtre affiche l'image pleine résolution, pas la vignette.
+  // The dialog shows the full resolution image, not the thumbnail.
   $("#modal-img").src =
     "/heatmap/" + encodeURIComponent(entry.file) + "?t=" + (state.heatmapStamp || "");
-  $("#modal-img").alt = "Heatmap " + entry.ssid;
+  $("#modal-img").alt = entry.ssid;
   $("#modal-stats").innerHTML = s
-    ? statCard("Minimum", s.min.toFixed(0), { unit: "dBm", color: signalColor(s.min) }) +
-      statCard("Moyenne", s.mean.toFixed(1), {
+    ? statCard(t("stat.minimum"), s.min.toFixed(0), {
+        unit: "dBm",
+        color: signalColor(s.min),
+      }) +
+      statCard(t("stat.average"), s.mean.toFixed(1), {
         unit: "dBm",
         sub: signalLabel(s.mean),
         color: signalColor(s.mean),
       }) +
-      statCard("Maximum", s.max.toFixed(0), { unit: "dBm", color: signalColor(s.max) }) +
-      statCard("Points", s.count)
+      statCard(t("stat.maximum"), s.max.toFixed(0), {
+        unit: "dBm",
+        color: signalColor(s.max),
+      }) +
+      statCard(t("stat.points"), s.count)
     : "";
   $("#modal").classList.remove("hidden");
 }
@@ -467,45 +559,65 @@ function closeHeatmap() {
 // ---------- Navigation ----------
 
 const VIEWS = {
-  dashboard: { crumb: "Vue d'ensemble", render: renderDashboard },
-  config: { crumb: "Configuration", render: renderConfig },
-  networks: { crumb: "Réseaux", render: renderNetworks },
-  collect: { crumb: "Collecte", render: renderCollect },
-  stats: { crumb: "Statistiques", render: renderStats },
-  heatmaps: { crumb: "Heatmaps", render: loadHeatmaps },
-  export: { crumb: "Export", render: () => {} },
+  dashboard: { crumb: "nav.dashboard", render: renderDashboard },
+  config: { crumb: "nav.config", render: renderConfig },
+  networks: { crumb: "nav.networks", render: renderNetworks },
+  collect: { crumb: "nav.collect", render: renderCollect },
+  stats: { crumb: "nav.stats", render: renderStats },
+  heatmaps: { crumb: "nav.heatmaps", render: loadHeatmaps },
+  export: { crumb: "nav.export", render: () => {} },
 };
 
 async function show(name) {
+  state.view = name;
   document.querySelectorAll("main section").forEach((s) => s.classList.add("hidden"));
   $("#view-" + name).classList.remove("hidden");
   document
     .querySelectorAll("#nav button")
     .forEach((b) => b.classList.toggle("active", b.dataset.view === name));
-  $("#crumb").textContent = "/ " + VIEWS[name].crumb;
+  $("#crumb").textContent = "/ " + t(VIEWS[name].crumb);
 
   await loadConfig();
   if (!state.dirty) await loadMeasurements();
-  VIEWS[name].render();
+  await VIEWS[name].render();
 }
 
-// ---------- Événements ----------
+function fillLanguageSelect() {
+  const select = $("#lang-select");
+  select.innerHTML = (state.config.languages || [])
+    .map(
+      (l) =>
+        `<option value="${esc(l.code)}" ${
+          l.code === state.lang ? "selected" : ""
+        }>${esc(l.name)}</option>`
+    )
+    .join("");
+}
+
+// ---------- Events ----------
 
 function wire() {
   document.querySelectorAll("#nav button").forEach((btn) => {
     btn.onclick = () => show(btn.dataset.view);
   });
 
-  // Configuration
-  [["cfg-timeout", "lbl-timeout"], ["cfg-dpi", "lbl-dpi"], ["cfg-res", "lbl-res"]].forEach(
-    ([input, label]) => {
-      $("#" + input).oninput = (e) => ($("#" + label).textContent = e.target.value);
-    }
-  );
+  $("#lang-select").onchange = async (e) => {
+    await api("/api/config", {
+      method: "POST",
+      body: JSON.stringify({ language: e.target.value }),
+    });
+    await loadLanguage(e.target.value);
+    await show(state.view);
+  };
+
+  // Settings
+  ["cfg-timeout", "cfg-dpi", "cfg-res"].forEach((id) => {
+    $("#" + id).oninput = refreshSliderLabels;
+  });
   $("#iface-refresh").onclick = loadInterfaces;
   $("#cfg-save").onclick = async () => {
     try {
-      state.config = await api("/api/config", {
+      await api("/api/config", {
         method: "POST",
         body: JSON.stringify({
           interface: $("#iface-select").value,
@@ -515,21 +627,25 @@ function wire() {
         }),
       });
       await loadConfig();
-      toast("Configuration enregistrée.", "ok");
+      toast(t("config.saved"), "ok");
     } catch (e) {
       toast(e.message, "err");
     }
   };
 
-  // Réseaux
+  // Networks
   $("#ssid-add").onclick = async () => {
     const value = $("#ssid-input").value.trim();
     if (!value) return;
-    await api("/api/ssids", { method: "POST", body: JSON.stringify({ ssid: value }) });
+    const res = await api("/api/ssids", {
+      method: "POST",
+      body: JSON.stringify({ ssid: value }),
+    });
     $("#ssid-input").value = "";
     await loadConfig();
     renderNetworks();
-    toast("Réseau ajouté.", "ok");
+    toast(res.added.length ? t("networks.add.done") : t("networks.add.duplicate"),
+          res.added.length ? "ok" : "warn");
   };
   $("#ssid-input").onkeydown = (e) => {
     if (e.key === "Enter") $("#ssid-add").click();
@@ -538,7 +654,7 @@ function wire() {
   $("#scan-btn").onclick = async () => {
     const btn = $("#scan-btn");
     btn.disabled = true;
-    btn.textContent = "Scan en cours...";
+    btn.textContent = t("networks.scan.running");
     try {
       const { networks } = await api("/api/scan", {
         method: "POST",
@@ -546,32 +662,33 @@ function wire() {
       });
       state.scanned = networks;
       renderScanResults();
-      toast(`${networks.length} réseau(x) détecté(s).`, networks.length ? "ok" : "warn");
+      toast(t("networks.scan.found", { count: networks.length }),
+            networks.length ? "ok" : "warn");
     } catch (e) {
-      toast("Scan impossible : " + e.message, "err");
+      toast(t("networks.scan.failed", { error: e.message }), "err");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Lancer un scan";
+      btn.textContent = t("networks.scan.run");
     }
   };
 
   $("#scan-add").onclick = async () => {
-    const picked = [...$("#scan-results").querySelectorAll("input:checked:not(:disabled)")].map(
-      (cb) => cb.value
-    );
-    if (!picked.length) return toast("Aucun nouveau réseau sélectionné.", "warn");
+    const picked = [
+      ...$("#scan-results").querySelectorAll("input:checked:not(:disabled)"),
+    ].map((cb) => cb.value);
+    if (!picked.length) return toast(t("networks.add.nothing"), "warn");
     await api("/api/ssids", { method: "POST", body: JSON.stringify({ ssids: picked }) });
     await loadConfig();
     renderNetworks();
-    renderScanResults();
-    toast(`${picked.length} réseau(x) ajouté(s).`, "ok");
+    toast(t("networks.add.selected", { count: picked.length }), "ok");
   };
 
-  // Collecte
+  // Survey
   $("#plan-img").onclick = onPlanClick;
   $("#plan-img").onerror = () => {
-    $("#plan-wrap").innerHTML =
-      `<p class="empty">Plan introuvable (${esc(state.config.plan_path)}).</p>`;
+    $("#plan-wrap").innerHTML = `<p class="empty">${esc(
+      t("collect.plan.missing", { path: state.config.plan_path })
+    )}</p>`;
   };
 
   $("#undo-btn").onclick = () => {
@@ -581,7 +698,7 @@ function wire() {
   };
 
   $("#clear-btn").onclick = () => {
-    if (!confirm("Effacer tous les points collectés ?")) return;
+    if (!confirm(t("collect.clear.confirm"))) return;
     state.measurements = [];
     state.dirty = true;
     renderCollect();
@@ -596,9 +713,9 @@ function wire() {
       state.dirty = false;
       await loadMeasurements();
       renderCollect();
-      toast(`${res.saved} points enregistrés.`, "ok");
+      toast(t("collect.saved", { count: res.saved }), "ok");
     } catch (e) {
-      toast("Enregistrement impossible : " + e.message, "err");
+      toast(t("collect.save.failed", { error: e.message }), "err");
     }
   };
 
@@ -606,17 +723,17 @@ function wire() {
   $("#gen-btn").onclick = async () => {
     const btn = $("#gen-btn");
     btn.disabled = true;
-    btn.textContent = "Génération...";
+    btn.textContent = t("heatmaps.generating");
     try {
       const res = await api("/api/heatmaps", { method: "POST" });
-      toast(`${res.generated}/${res.total} cartes générées.`, "ok");
-      state.heatmapStamp = Date.now(); // force le rechargement des vignettes
+      toast(t("heatmaps.generated", { done: res.generated, total: res.total }), "ok");
+      state.heatmapStamp = Date.now(); // force the thumbnails to reload
       await loadHeatmaps();
     } catch (e) {
-      toast("Génération impossible : " + e.message, "err");
+      toast(t("heatmaps.generate.failed", { error: e.message }), "err");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Générer les cartes";
+      btn.textContent = t("heatmaps.generate.button");
     }
   };
 
@@ -637,11 +754,19 @@ function wire() {
     if (e.key === "Escape") closeHeatmap();
   });
 
-  // Évite de perdre des points non enregistrés.
+  // Avoid losing points that were never saved.
   window.addEventListener("beforeunload", (e) => {
     if (state.dirty) e.preventDefault();
   });
 }
 
-wire();
-show("dashboard").catch((e) => toast("Chargement impossible : " + e.message, "err"));
+async function start() {
+  const config = await api("/api/config");
+  state.config = config;
+  await loadLanguage(config.language);
+  fillLanguageSelect();
+  wire();
+  await show("dashboard");
+}
+
+start().catch((e) => toast("Startup failed: " + e.message, "err"));

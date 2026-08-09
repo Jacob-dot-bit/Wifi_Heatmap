@@ -1,4 +1,4 @@
-"""Collecte interactive des mesures via une fenêtre matplotlib."""
+"""Interactive survey through a matplotlib window."""
 
 import logging
 from pathlib import Path
@@ -10,12 +10,13 @@ from matplotlib.widgets import Button
 
 from .scanner import WiFiScanner
 from .utils import save_measurements
+from .i18n import Translator
 
 logger = logging.getLogger(__name__)
 
 
 class InteractiveCollector:
-    """Affiche le plan, scanne le WiFi à chaque clic et enregistre les points."""
+    """Show the plan, scan on every click and record the readings."""
 
     def __init__(
         self,
@@ -24,6 +25,7 @@ class InteractiveCollector:
         output_file: str = "mesures.json",
         scan_timeout: int = 15,
         wifi_interface: str = "wlan0",
+        translator: Translator = None,
     ):
         self.plan_path = plan_path
         self.ssids = ssids
@@ -31,31 +33,29 @@ class InteractiveCollector:
         self.measurements: List[Dict] = []
         self.scanning = False
         self.point_num = 0
+        self.tr = translator or Translator()
 
         try:
             self.plan = mpimg.imread(plan_path)
             self.h, self.w = self.plan.shape[:2]
         except Exception as e:
-            logger.error(f"Chargement du plan impossible: {e}")
+            logger.error(f"could not read the floor plan: {e}")
             raise
 
         self.scanner = WiFiScanner(interface=wifi_interface, timeout=scan_timeout)
 
     def run(self) -> bool:
         if not self.ssids:
-            logger.error("Aucun SSID configuré")
+            logger.error("no network configured")
             return False
 
         self.fig = plt.figure(figsize=(14, 9))
         self.ax = self.fig.add_axes([0.02, 0.08, 0.96, 0.90])
         ax_btn = self.fig.add_axes([0.40, 0.01, 0.20, 0.05])
-        btn = Button(ax_btn, "TERMINER ET SAUVEGARDER", color="lightgreen")
+        btn = Button(ax_btn, self.tr.t("collector.button"), color="lightgreen")
 
         self.ax.imshow(self.plan)
-        self.ax.set_title(
-            "Cliquez à chaque position, puis attendez la fin du scan",
-            fontsize=11,
-        )
+        self.ax.set_title(self.tr.t("collector.title"), fontsize=11)
         self.ax.axis("off")
 
         colors = plt.cm.tab10(np.linspace(0, 1, min(len(self.ssids), 10)))
@@ -69,30 +69,22 @@ class InteractiveCollector:
         self.scatters = {}
         for i, ssid in enumerate(self.ssids):
             self.scatters[ssid] = self.ax.scatter(
-                [],
-                [],
-                color=colors[i % 10],
-                s=120,
-                edgecolors="black",
-                linewidths=0.6,
-                zorder=5,
-                alpha=0.9,
+                [], [], color=colors[i % 10], s=120,
+                edgecolors="black", linewidths=0.6, zorder=5, alpha=0.9,
             )
 
         self.status_txt = self.ax.text(
-            0.01,
-            0.01,
-            "Cliquez sur le plan",
-            transform=self.ax.transAxes,
-            fontsize=10,
+            0.01, 0.01, self.tr.t("collector.ready"),
+            transform=self.ax.transAxes, fontsize=10,
             bbox=dict(boxstyle="round", fc="white", alpha=0.8),
         )
 
         self.fig.canvas.mpl_connect("button_press_event", self._on_click)
         btn.on_clicked(self._on_finish)
 
-        print(f"Plan: {Path(self.plan_path).name} ({self.w}x{self.h}px), {len(self.ssids)} SSIDs")
-        print("Cliquez, attendez le scan, déplacez-vous, recommencez.\n")
+        print(self.tr.t("collector.info", name=Path(self.plan_path).name,
+                        width=self.w, height=self.h, count=len(self.ssids)))
+        print(self.tr.t("collector.help") + "\n")
 
         plt.tight_layout()
         plt.show()
@@ -106,16 +98,16 @@ class InteractiveCollector:
         self.point_num += 1
         self.scanning = True
 
-        self.status_txt.set_text(f"Point {self.point_num} - scan en cours...")
+        self.status_txt.set_text(self.tr.t("collector.scanning", index=self.point_num))
         self.fig.canvas.draw()
         plt.pause(0.05)
 
-        print(f"\nPoint {self.point_num} ({int(x)}, {int(y)}) - scan...", flush=True)
+        print(f"\nPoint {self.point_num} ({int(x)}, {int(y)})", flush=True)
         rssis = self.scanner.scan_all()
 
         if not rssis:
-            print("  Aucun réseau trouvé.")
-            self.status_txt.set_text(f"Point {self.point_num} - aucun réseau, recliquez.")
+            print(self.tr.t("collector.nonetwork"))
+            self.status_txt.set_text(self.tr.t("collector.none", index=self.point_num))
             self.point_num -= 1
             self.scanning = False
             self.fig.canvas.draw()
@@ -133,25 +125,22 @@ class InteractiveCollector:
                 self.scatters[ssid].set_offsets(pts)
 
         self.ax.annotate(
-            str(self.point_num),
-            (x, y),
-            textcoords="offset points",
-            xytext=(4, 4),
-            fontsize=9,
-            fontweight="bold",
+            str(self.point_num), (x, y),
+            textcoords="offset points", xytext=(4, 4),
+            fontsize=9, fontweight="bold",
             bbox=dict(boxstyle="round,pad=0.15", fc="yellow", alpha=0.8),
         )
 
-        self.status_txt.set_text(f"{self.point_num} point(s) collecté(s)")
+        self.status_txt.set_text(self.tr.t("collector.collected", count=self.point_num))
         self.scanning = False
         self.fig.canvas.draw()
 
     def _on_finish(self, event):
         if not self.measurements:
-            print("Aucun point collecté.")
+            print(self.tr.t("collector.nopoint"))
             return
         if save_measurements(self.measurements, self.ssids, self.plan_path, self.output_file):
-            print(f"\n{len(self.measurements)} points sauvegardés.")
+            print(self.tr.t("collector.saved", count=len(self.measurements)))
         else:
-            print("\nErreur lors de la sauvegarde.")
+            print(self.tr.t("collector.savefailed"))
         plt.close()

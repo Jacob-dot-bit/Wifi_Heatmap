@@ -1,4 +1,4 @@
-"""Configuration de l'application, persistée en JSON."""
+"""Application settings, persisted as JSON."""
 
 import json
 import logging
@@ -19,6 +19,7 @@ class Config:
         self.plan_path: str = self.DEFAULT_PLAN_FILE
         self.measurements_path: str = self.DEFAULT_MEASUREMENTS_FILE
         self.wifi_interface: str = "wlan0"
+        self.language: str = "en"
         self.scan_timeout: int = 15
         self.heatmap_dpi: int = 150
         self.heatmap_resolution: int = 400
@@ -35,10 +36,10 @@ class Config:
         if not Path(self.config_file).exists():
             return
         try:
-            with open(self.config_file) as f:
+            with open(self.config_file, encoding="utf-8") as f:
                 self.__dict__.update(json.load(f))
         except Exception as e:
-            logger.warning(f"Config illisible: {e}")
+            logger.warning(f"Unreadable settings file: {e}")
 
     def save(self) -> None:
         config_data = {
@@ -46,6 +47,7 @@ class Config:
             "plan_path": self.plan_path,
             "measurements_path": self.measurements_path,
             "wifi_interface": self.wifi_interface,
+            "language": self.language,
             "scan_timeout": self.scan_timeout,
             "heatmap_dpi": self.heatmap_dpi,
             "heatmap_resolution": self.heatmap_resolution,
@@ -57,13 +59,13 @@ class Config:
             "output_dir": self.output_dir,
         }
         try:
-            with open(self.config_file, "w") as f:
-                json.dump(config_data, f, indent=2)
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            logger.error(f"Sauvegarde impossible: {e}")
+            logger.error(f"Could not save settings: {e}")
 
     def add_ssid(self, ssid: str) -> bool:
-        """Ajoute un SSID. Retourne False s'il était déjà présent."""
+        """Add a network. Returns False if it was already tracked."""
         if ssid not in self.ssids:
             self.ssids.append(ssid)
             return True
@@ -79,8 +81,9 @@ class Config:
         return self.ssids.copy()
 
     def is_valid(self) -> tuple[bool, str]:
+        """Check that a survey can run. Returns (ok, message key or 'ok')."""
         if not self.ssids:
-            return False, "Aucun SSID configuré"
+            return False, "config.error.nossid"
         if not Path(self.plan_path).exists():
-            return False, f"Plan introuvable: {self.plan_path}"
+            return False, "config.error.noplan"
         return True, "ok"
