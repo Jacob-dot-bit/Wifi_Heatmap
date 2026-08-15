@@ -15,6 +15,11 @@ without touching the code — see [Translations](#translations).
 
 Author: Jakub WERLINSKI.
 
+One map per tracked network, each labelled with the model that produced it and
+its cross-validation error:
+
+![Grid of rendered heatmaps, one per network, over the sample floor plan](docs/heatmaps.png)
+
 ## Requirements
 
 - Python 3 with `numpy`, `matplotlib`, `scipy`, `flask`, `pillow`
@@ -43,7 +48,19 @@ Pick the WiFi interface under *Settings*, choose the networks to follow under
 *Networks*, then click your position on the plan under *Survey* — each click
 triggers a scan and records a point. *Heatmaps* renders the maps.
 
-Collected points stay in the browser until you press **Save**.
+*Survey* numbers every point as it lands on the plan, and the side panel breaks
+down what the last scan picked up:
+
+![Survey view: numbered points on the floor plan, with the last scan listed beside it](docs/survey.png)
+
+Collected points stay in the browser until you press **Save**. *Undo last
+point* and *Clear all* work on that pending set, so a mistaken click costs
+nothing.
+
+*Overview* sums up the survey once it is saved — how many points, which network
+comes out strongest, and the spread of each one:
+
+![Overview: stat panels, per-network gauges and a coverage table](docs/overview.png)
 
 Command line version: `./run.sh`.
 
@@ -96,6 +113,7 @@ src/collector.py interactive survey (matplotlib)
 src/heatmap_generator.py  interpolation and rendering
 src/utils.py     reading, writing and exporting measurements
 data/            plan.png and mesures.json
+docs/            screenshots used by this file
 tools/           sample floor plan generator
 output/          rendered heatmaps, thumbnails under .thumbs/
 ```
@@ -105,6 +123,11 @@ output/          rendered heatmaps, thumbnails under .thumbs/
 `wifi_config.json` is created on first save and can be edited by hand. It is
 not tracked by git, being specific to each machine; copy
 `wifi_config.example.json` over it to start from a documented set of keys.
+
+The keys that matter day to day are exposed in the *Settings* view; the rest of
+the table below is only reachable by editing the file:
+
+![Settings: interface picker, file paths and rendering sliders](docs/settings.png)
 
 The survey shipped in `data/` uses neutral network names, and `data/plan.png`
 is a drawn floor plan rather than a real building: network names and a picture
