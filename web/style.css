@@ -217,7 +217,9 @@ body {
   overflow: hidden;
 }
 
-.gauge .fill { height: 100%; transition: width .25s ease; }
+/* display:block matters: a span stays inline, and an inline box ignores
+   both width and height, which collapses the bar to nothing. */
+.gauge .fill { display: block; height: 100%; transition: width .25s ease; }
 
 .gauge .num {
   width: 88px;
