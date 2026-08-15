@@ -7,7 +7,6 @@ wifi_config.json
 measurements.csv
 stats.csv
 output/
-*.avant-restauration
 
 # Real site plan, kept out of version control
 data/*.local.*
