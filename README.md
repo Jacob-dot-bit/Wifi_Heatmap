@@ -22,6 +22,16 @@ its cross-validation error:
 
 ## Requirements
 
+**Surveying requires Linux.** Readings come from `sudo iw`, which has no
+equivalent on Windows or macOS. Everything else — rendering maps, the web
+interface, statistics, exports — is plain Python and runs anywhere; opening an
+existing survey and generating its heatmaps works on any platform. Off Linux
+the scanner says so plainly instead of failing in a confusing way.
+
+On Windows, WSL is the usual way round it, provided the distribution can reach
+the wireless adapter — WSL2 does not pass physical network devices through by
+default.
+
 - Python 3 with `numpy`, `matplotlib`, `scipy`, `flask`, `pillow`
 - `iw` for scanning (`sudo apt install iw`)
 - passwordless `sudo` for `iw`, otherwise every scan fails:
@@ -30,6 +40,9 @@ its cross-validation error:
   # in sudo visudo
   youruser ALL=(ALL) NOPASSWD: /usr/sbin/iw
   ```
+
+  Scoping the rule to `iw` alone is enough; the readiness check probes that
+  exact command rather than a placeholder.
 
 On Kali/Debian the Python packages come from apt:
 
