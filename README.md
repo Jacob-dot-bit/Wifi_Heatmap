@@ -218,3 +218,12 @@ built to be exposed on a network.
 The interpolation knows nothing about the geometry of the place — neither walls
 nor the logarithmic fall-off with distance. On a sparse survey it barely beats
 predicting the network average, which the RMSE printed on each map makes plain.
+
+Surveying a network means listening to it. Scan the places you are entitled to
+scan, and keep in mind that the network names a survey records are those of
+your neighbours as much as your own — which is why the sample here carries none
+of them.
+
+## License
+
+[MIT](LICENSE) — do what you like with it, keep the copyright notice.
